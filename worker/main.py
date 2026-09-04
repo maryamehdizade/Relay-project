@@ -1,36 +1,91 @@
+import json
 import os
-import time
 
 import pika
 
 
-rabbitmq_host = os.getenv("RABBITMQ_HOST", "rabbitmq")
-rabbitmq_port = int(os.getenv("RABBITMQ_PORT", "5672"))
-rabbitmq_user = os.getenv("RABBITMQ_DEFAULT_USER", "guest")
-rabbitmq_password = os.getenv("RABBITMQ_DEFAULT_PASS", "guest")
+RABBITMQ_HOST = os.getenv("RABBITMQ_HOST", "rabbitmq")
+RABBITMQ_PORT = int(os.getenv("RABBITMQ_PORT", "5672"))
+RABBITMQ_USER = os.getenv("RABBITMQ_DEFAULT_USER", "guest")
+RABBITMQ_PASSWORD = os.getenv("RABBITMQ_DEFAULT_PASS", "guest")
+
+COMMAND_QUEUE = "ai.commands"
 
 
-credentials = pika.PlainCredentials(
-    rabbitmq_user,
-    rabbitmq_password,
-)
+def process_command(command):
+    print("Received command:")
+    print(json.dumps(command, indent=2))
 
-connection = pika.BlockingConnection(
-    pika.ConnectionParameters(
-        host=rabbitmq_host,
-        port=rabbitmq_port,
-        credentials=credentials,
+    print(
+        "Processing:",
+        command.get("type"),
+        "correlation_id=",
+        command.get("correlation_id"),
     )
-)
 
-print("AI worker connected to RabbitMQ successfully.")
+    # Dummy processing for now.
+    print("Command processed successfully.")
 
-try:
-    while True:
-        connection.process_data_events(time_limit=1)
-        time.sleep(1)
-except KeyboardInterrupt:
-    pass
-finally:
-    if connection.is_open:
-        connection.close()
+
+def on_command(channel, method, properties, body):
+    try:
+        command = json.loads(body)
+
+        process_command(command)
+
+        channel.basic_ack(
+            delivery_tag=method.delivery_tag,
+        )
+
+    except Exception as exc:
+        print(f"Command processing failed: {exc}")
+
+        channel.basic_nack(
+            delivery_tag=method.delivery_tag,
+            requeue=True,
+        )
+
+
+def main():
+    credentials = pika.PlainCredentials(
+        RABBITMQ_USER,
+        RABBITMQ_PASSWORD,
+    )
+
+    connection = pika.BlockingConnection(
+        pika.ConnectionParameters(
+            host=RABBITMQ_HOST,
+            port=RABBITMQ_PORT,
+            credentials=credentials,
+        )
+    )
+
+    channel = connection.channel()
+
+    channel.queue_declare(
+        queue=COMMAND_QUEUE,
+        durable=True,
+    )
+
+    channel.basic_qos(prefetch_count=1)
+
+    channel.basic_consume(
+        queue=COMMAND_QUEUE,
+        on_message_callback=on_command,
+        auto_ack=False,
+    )
+
+    print("AI worker connected to RabbitMQ.")
+    print(f"Waiting for commands on '{COMMAND_QUEUE}'...")
+
+    try:
+        channel.start_consuming()
+    except KeyboardInterrupt:
+        print("Worker stopped.")
+    finally:
+        if connection.is_open:
+            connection.close()
+
+
+if __name__ == "__main__":
+    main()
