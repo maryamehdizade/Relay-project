@@ -1,9 +1,13 @@
-from django.shortcuts import render
-from rest_framework.generics import ListAPIView, RetrieveAPIView
+from django.shortcuts import render, get_object_or_404
+from rest_framework.generics import (
+    ListAPIView,
+    ListCreateAPIView,
+    RetrieveAPIView,
+)
 from rest_framework.permissions import IsAuthenticated
 
-from .models import Order
-from .serializers import OrderSerializer
+from .models import Order, Conversation, Message
+from .serializers import (OrderSerializer, ConversationSerializer, MessageSerializer)
 
 
 class OrderListView(ListAPIView):
@@ -20,3 +24,43 @@ class OrderDetailView(RetrieveAPIView):
 
     def get_queryset(self):
         return Order.objects.filter(user=self.request.user)
+
+class ConversationListCreateView(ListCreateAPIView):
+    serializer_class = ConversationSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        return Conversation.objects.filter(
+            user=self.request.user
+        ).order_by("-updated_at")
+
+    def perform_create(self, serializer):
+        serializer.save(user=self.request.user)
+
+class MessageListCreateView(ListCreateAPIView):
+    serializer_class = MessageSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_conversation(self):
+        return get_object_or_404(
+            Conversation,
+            id=self.kwargs["conversation_id"],
+            user=self.request.user,
+        )
+
+    def get_queryset(self):
+        conversation = self.get_conversation()
+
+        return Message.objects.filter(
+            conversation=conversation
+        ).order_by("created_at")
+
+    def perform_create(self, serializer):
+        conversation = self.get_conversation()
+
+        serializer.save(
+            conversation=conversation,
+            role=Message.Role.USER,
+        )
+
+        conversation.save()

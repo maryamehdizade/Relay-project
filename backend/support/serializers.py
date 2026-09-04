@@ -25,6 +25,7 @@ class MessageSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = [
             "id",
+            "role",
             "created_at",
         ]
 
