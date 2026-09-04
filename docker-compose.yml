@@ -63,6 +63,20 @@ services:
       rabbitmq:
         condition: service_healthy
 
+  event-consumer:
+    build:
+      context: ./backend
+    command: python manage.py consume_events
+    env_file:
+      - .env
+    volumes:
+      - ./backend:/app
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
   frontend:
     build:
       context: ./frontend
