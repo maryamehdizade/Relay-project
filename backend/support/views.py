@@ -10,6 +10,9 @@ from .models import Order, Conversation, Message
 from .serializers import (OrderSerializer, ConversationSerializer, MessageSerializer)
 from .messaging import build_message, publish_command
 
+import uuid
+
+
 class OrderListView(ListAPIView):
     serializer_class = OrderSerializer
     permission_classes = [IsAuthenticated]
@@ -57,16 +60,19 @@ class MessageListCreateView(ListCreateAPIView):
 
     def perform_create(self, serializer):
         conversation = self.get_conversation()
-
+        correlation_id = uuid.uuid4()
+        
         message = serializer.save(
             conversation=conversation,
             role=Message.Role.USER,
+            correlation_id=correlation_id,
         )
 
         conversation.save()
 
         command = build_message(
             message_type="chat.generate_response",
+            correlation_id=str(correlation_id),
             payload={
                 "message_id": message.id,
                 "conversation_id": conversation.id,

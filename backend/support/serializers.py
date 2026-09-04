@@ -19,12 +19,14 @@ class MessageSerializer(serializers.ModelSerializer):
         model = Message
         fields = [
             "id",
+            "correlation_id",
             "role",
             "content",
             "created_at",
         ]
         read_only_fields = [
             "id",
+            "correlation_id",
             "role",
             "created_at",
         ]

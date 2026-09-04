@@ -1,6 +1,7 @@
 from django.contrib.auth import get_user_model
 from rest_framework.authtoken.models import Token
 from rest_framework.test import APITestCase
+from unittest.mock import patch
 
 from .models import Conversation, Message, Order
 
@@ -10,6 +11,10 @@ User = get_user_model()
 
 class AuthorizationTests(APITestCase):
     def setUp(self):
+        self.publish_patcher = patch("support.views.publish_command")
+        self.mock_publish_command = self.publish_patcher.start()
+        self.addCleanup(self.publish_patcher.stop)
+        
         self.customer1 = User.objects.create_user(
             username="customer1",
             password="TestPass123!",
