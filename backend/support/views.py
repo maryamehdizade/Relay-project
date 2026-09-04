@@ -8,7 +8,7 @@ from rest_framework.permissions import IsAuthenticated
 
 from .models import Order, Conversation, Message
 from .serializers import (OrderSerializer, ConversationSerializer, MessageSerializer)
-
+from .messaging import build_message, publish_command
 
 class OrderListView(ListAPIView):
     serializer_class = OrderSerializer
@@ -58,9 +58,20 @@ class MessageListCreateView(ListCreateAPIView):
     def perform_create(self, serializer):
         conversation = self.get_conversation()
 
-        serializer.save(
+        message = serializer.save(
             conversation=conversation,
             role=Message.Role.USER,
         )
 
         conversation.save()
+
+        command = build_message(
+            message_type="chat.generate_response",
+            payload={
+                "message_id": message.id,
+                "conversation_id": conversation.id,
+                "user_id": self.request.user.id,
+            },
+        )
+
+        publish_command(command)
