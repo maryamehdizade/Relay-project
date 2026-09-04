@@ -1,6 +1,7 @@
 import json
 import os
-
+import uuid
+from datetime import datetime, timezone
 import pika
 
 
@@ -10,9 +11,19 @@ RABBITMQ_USER = os.getenv("RABBITMQ_DEFAULT_USER", "guest")
 RABBITMQ_PASSWORD = os.getenv("RABBITMQ_DEFAULT_PASS", "guest")
 
 COMMAND_QUEUE = "ai.commands"
+EVENT_QUEUE = "ai.events"
 
+def build_event(event_type, payload, correlation_id):
+    return {
+        "version": "1.0",
+        "event_id": str(uuid.uuid4()),
+        "correlation_id": correlation_id,
+        "type": event_type,
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "payload": payload,
+    }
 
-def process_command(command):
+def process_command(channel, command):
     print("Received command:")
     print(json.dumps(command, indent=2))
 
@@ -23,15 +34,37 @@ def process_command(command):
         command.get("correlation_id"),
     )
 
-    # Dummy processing for now.
-    print("Command processed successfully.")
+    payload = command["payload"]
+
+    event = build_event(
+        event_type="chat.response.generated",
+        correlation_id=command["correlation_id"],
+        payload={
+            "conversation_id": payload["conversation_id"],
+            "user_id": payload["user_id"],
+            "content": "Hello from the AI worker.",
+        },
+    )
+
+    channel.basic_publish(
+        exchange="",
+        routing_key=EVENT_QUEUE,
+        body=json.dumps(event),
+        properties=pika.BasicProperties(
+            delivery_mode=2,
+        ),
+    )
+
+    print("Published event:")
+    print(json.dumps(event, indent=2))
+
 
 
 def on_command(channel, method, properties, body):
     try:
         command = json.loads(body)
 
-        process_command(command)
+        process_command(channel, command)
 
         channel.basic_ack(
             delivery_tag=method.delivery_tag,
@@ -67,6 +100,11 @@ def main():
         durable=True,
     )
 
+    channel.queue_declare(
+    queue=EVENT_QUEUE,
+    durable=True,
+    )
+    
     channel.basic_qos(prefetch_count=1)
 
     channel.basic_consume(
