@@ -4,6 +4,8 @@ import os
 import aio_pika
 from django.http import JsonResponse, StreamingHttpResponse
 from rest_framework.authtoken.models import Token
+from .models import Conversation
+
 
 
 EVENT_EXCHANGE = "ai.events"
@@ -30,7 +32,7 @@ async def get_user_from_request(request):
     return token.user
 
 
-async def event_stream(request):
+async def event_stream(request, conversation_id):
     user = await get_user_from_request(request)
 
     if user is None:
@@ -38,6 +40,16 @@ async def event_stream(request):
             {"detail": "Authentication credentials were not provided."},
             status=401,
         )
+    conversation_exists = await Conversation.objects.filter(
+        id=conversation_id,
+        user_id=user.id,
+    ).aexists()
+
+    if not conversation_exists:
+        return JsonResponse(
+            {"detail": "Conversation not found."},
+            status=404,
+            )
 
     async def stream():
         connection = None
@@ -70,7 +82,7 @@ async def event_stream(request):
 
             exchange = await channel.declare_exchange(
                 EVENT_EXCHANGE,
-                aio_pika.ExchangeType.FANOUT,
+                aio_pika.ExchangeType.TOPIC,
                 durable=True,
             )
 
@@ -80,7 +92,8 @@ async def event_stream(request):
                 auto_delete=True,
             )
 
-            await queue.bind(exchange)
+            await queue.bind(
+                exchange,routing_key=f"conversation.{conversation_id}",)
 
             yield "event: connected\ndata: {}\n\n"
 

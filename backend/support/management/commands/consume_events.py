@@ -43,7 +43,7 @@ class Command(BaseCommand):
 
         channel.exchange_declare( 
             exchange=EVENT_EXCHANGE,
-            exchange_type="fanout",
+            exchange_type="topic",
             durable=True,
         )
 
@@ -56,6 +56,7 @@ class Command(BaseCommand):
         channel.queue_bind(
             exchange=EVENT_EXCHANGE,
             queue=EVENT_QUEUE,
+            routing_key="conversation.*",
             )
 
         channel.basic_qos(prefetch_count=1)

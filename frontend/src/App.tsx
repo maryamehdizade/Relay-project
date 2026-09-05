@@ -7,6 +7,7 @@ import "./App.css";
 
 function App() {
   const [token, setToken] = useState("");
+  const [conversationId, setConversationId] = useState(1);
 
   const {
     connectionState,
@@ -15,7 +16,7 @@ function App() {
     disconnect,
   } = useEventStream();
 
-
+  
   return (
     <main className="app">
       <h1>Relay</h1>
@@ -36,11 +37,22 @@ function App() {
           }}
           placeholder="Paste token here"
         />
-
+        <label htmlFor="conversation">
+          Conversation ID
+        </label>
+        <input
+          id="conversation"
+          type="number"
+          min="1"
+          value={conversationId}
+          onChange={(event) => {
+            setConversationId(Number(event.target.value));
+          }}
+        />
         <div className="buttons">
           <button
             type="button"
-            onClick={() => connect(token)}
+            onClick={() => connect(token, conversationId)}
           >
             Connect
           </button>

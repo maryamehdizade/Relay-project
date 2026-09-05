@@ -18,7 +18,7 @@ export function useEventStream() {
     useRef<AbortController | null>(null);
 
 
-  function connect(token: string) {
+  function connect(token: string,  conversationId: number) {
     if (!token.trim()) {
       return;
     }
@@ -31,6 +31,7 @@ export function useEventStream() {
 
     void connectToEventStream({
       token: token.trim(),
+      conversationId,
       signal: controller.signal,
 
       onEvent: (event) => {

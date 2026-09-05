@@ -46,9 +46,11 @@ def process_command(channel, command):
         },
     )
 
+    routing_key = f"conversation.{payload['conversation_id']}" 
+
     channel.basic_publish(
         exchange= EVENT_EXCHANGE,
-        routing_key="",
+        routing_key=routing_key,
         body=json.dumps(event),
         properties=pika.BasicProperties(
             delivery_mode=2,
@@ -102,7 +104,7 @@ def main():
 
     channel.exchange_declare(
         exchange=EVENT_EXCHANGE,
-        exchange_type="fanout",
+        exchange_type="topic",
         durable=True,
     )
     

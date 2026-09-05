@@ -21,6 +21,7 @@ export interface ServerEvent {
 
 interface ConnectOptions {
   token: string;
+  conversationId: number;
   signal: AbortSignal;
   onEvent: (event: ServerEvent) => void;
   onStateChange: (state: ConnectionState) => void;
@@ -59,6 +60,7 @@ function parseSseBlock(block: string) {
 
 export async function connectToEventStream({
   token,
+  conversationId,
   signal,
   onEvent,
   onStateChange,
@@ -72,7 +74,7 @@ export async function connectToEventStream({
       );
 
       const response = await fetch(
-        `${API_BASE_URL}/api/events/stream/`,
+        `${API_BASE_URL}/api/conversations/${conversationId}/events/stream/`,
         {
           method: "GET",
           headers: {
