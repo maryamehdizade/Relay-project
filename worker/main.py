@@ -11,7 +11,7 @@ RABBITMQ_USER = os.getenv("RABBITMQ_DEFAULT_USER", "guest")
 RABBITMQ_PASSWORD = os.getenv("RABBITMQ_DEFAULT_PASS", "guest")
 
 COMMAND_QUEUE = "ai.commands"
-EVENT_QUEUE = "ai.events"
+EVENT_EXCHANGE = "ai.events"
 
 def build_event(event_type, payload, correlation_id):
     return {
@@ -47,8 +47,8 @@ def process_command(channel, command):
     )
 
     channel.basic_publish(
-        exchange="",
-        routing_key=EVENT_QUEUE,
+        exchange= EVENT_EXCHANGE,
+        routing_key="",
         body=json.dumps(event),
         properties=pika.BasicProperties(
             delivery_mode=2,
@@ -100,9 +100,10 @@ def main():
         durable=True,
     )
 
-    channel.queue_declare(
-    queue=EVENT_QUEUE,
-    durable=True,
+    channel.exchange_declare(
+        exchange=EVENT_EXCHANGE,
+        exchange_type="fanout",
+        durable=True,
     )
     
     channel.basic_qos(prefetch_count=1)

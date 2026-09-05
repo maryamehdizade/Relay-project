@@ -9,7 +9,8 @@ from django.db import transaction
 from support.models import Conversation, Message
 
 
-EVENT_QUEUE = "ai.events"
+EVENT_EXCHANGE = "ai.events"
+EVENT_QUEUE = "ai.events.persistence"
 
 
 class Command(BaseCommand):
@@ -40,10 +41,22 @@ class Command(BaseCommand):
 
         channel = connection.channel()
 
+        channel.exchange_declare( 
+            exchange=EVENT_EXCHANGE,
+            exchange_type="fanout",
+            durable=True,
+        )
+
+
         channel.queue_declare(
             queue=EVENT_QUEUE,
             durable=True,
         )
+
+        channel.queue_bind(
+            exchange=EVENT_EXCHANGE,
+            queue=EVENT_QUEUE,
+            )
 
         channel.basic_qos(prefetch_count=1)
 
