@@ -1,3 +1,9 @@
+import os
+
+from langchain_core.messages import SystemMessage
+from langchain_openai import ChatOpenAI
+from langgraph.prebuilt import tools_condition
+
 from typing import Annotated, TypedDict
 
 from langchain_core.messages import AIMessage, AnyMessage
@@ -61,6 +67,89 @@ def build_order_graph(user_id: int):
     builder.add_edge(
         "tools",
         END,
+    )
+
+    return builder.compile()
+
+SYSTEM_PROMPT = """
+You are Relay, a customer support assistant.
+
+Use the available tools whenever customer-specific information
+is required.
+
+For questions about an order's status or tracking information,
+use the get_order_status tool.
+
+Never invent order information.
+If the tool cannot find the requested order, tell the customer
+that the order could not be found in their account.
+""".strip()
+
+
+def build_agent_graph(user_id: int):
+    order_status_tool = build_order_status_tool(user_id)
+    tools = [order_status_tool]
+
+    api_key = os.getenv("LLM_API_KEY")
+    model_name = os.getenv("LLM_MODEL")
+    base_url = os.getenv("LLM_BASE_URL") or None
+
+    if not api_key:
+        raise RuntimeError("LLM_API_KEY is not configured.")
+
+    if not model_name:
+        raise RuntimeError("LLM_MODEL is not configured.")
+
+    llm = ChatOpenAI(
+        api_key=api_key,
+        model=model_name,
+        base_url=base_url,
+        temperature=0,
+    )
+
+    llm_with_tools = llm.bind_tools(tools)
+
+    def call_model(state: AgentState):
+        messages = [
+            SystemMessage(content=SYSTEM_PROMPT),
+            *state["messages"],
+        ]
+
+        response = llm_with_tools.invoke(messages)
+
+        return {
+            "messages": [response],
+        }
+
+    builder = StateGraph(AgentState)
+
+    builder.add_node(
+        "agent",
+        call_model,
+    )
+
+    builder.add_node(
+        "tools",
+        ToolNode(tools),
+    )
+
+    builder.add_edge(
+        START,
+        "agent",
+    )
+
+    builder.add_conditional_edges(
+        "agent",
+        tools_condition,
+        {
+            "tools": "tools",
+            "__end__": END,
+        },
+    )
+
+    builder.add_edge(
+        "tools",
+        "agent",
     )
 
     return builder.compile()
