@@ -4,6 +4,11 @@ import uuid
 from datetime import datetime, timezone
 import pika
 
+from langchain_core.messages import HumanMessage
+
+from agent_graph import build_agent_graph
+from db_tools import get_user_message
+
 
 RABBITMQ_HOST = os.getenv("RABBITMQ_HOST", "rabbitmq")
 RABBITMQ_PORT = int(os.getenv("RABBITMQ_PORT", "5672"))
@@ -27,29 +32,75 @@ def process_command(channel, command):
     print("Received command:")
     print(json.dumps(command, indent=2))
 
-    print(
-        "Processing:",
-        command.get("type"),
-        "correlation_id=",
-        command.get("correlation_id"),
-    )
-
+    correlation_id = command["correlation_id"]
+    command_type = command["type"]
     payload = command["payload"]
 
-    event = build_event(
-        event_type="chat.response.generated",
-        correlation_id=command["correlation_id"],
-        payload={
-            "conversation_id": payload["conversation_id"],
-            "user_id": payload["user_id"],
-            "content": "Hello from the AI worker.",
+    print(
+        f"Processing type={command_type} "
+        f"correlation_id={correlation_id}"
+    )
+
+    if command_type != "chat.generate_response":
+        raise ValueError(
+            f"Unsupported command type: {command_type}"
+        )
+
+    user_id = payload["user_id"]
+    conversation_id = payload["conversation_id"]
+    message_id = payload["message_id"]
+
+    user_message = get_user_message(
+        user_id=user_id,
+        conversation_id=conversation_id,
+        message_id=message_id,
+    )
+
+    if not user_message["found"]:
+        raise ValueError(
+            "User message could not be found "
+            "for the authenticated user."
+        )
+
+    graph = build_agent_graph(
+        user_id=user_id,
+    )
+
+    result = graph.invoke(
+        {
+            "messages": [
+                HumanMessage(
+                    content=user_message["content"]
+                )
+            ],
+            "order_number": "",
+        },
+        config={
+            "recursion_limit": 8,
         },
     )
 
-    routing_key = f"conversation.{payload['conversation_id']}" 
+    assistant_message = result["messages"][-1]
+
+    response_content = assistant_message.content
+
+    if not isinstance(response_content, str):
+        response_content = str(response_content)
+
+    event = build_event(
+        "chat.response.generated",
+        {
+            "conversation_id": conversation_id,
+            "user_id": user_id,
+            "content": response_content,
+        },
+        correlation_id=correlation_id,
+    )
+
+    routing_key = f"conversation.{conversation_id}"
 
     channel.basic_publish(
-        exchange= EVENT_EXCHANGE,
+        exchange=EVENT_EXCHANGE,
         routing_key=routing_key,
         body=json.dumps(event),
         properties=pika.BasicProperties(
