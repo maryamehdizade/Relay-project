@@ -112,6 +112,7 @@ def get_user_message(
 def get_conversation_history(
     user_id: int,
     conversation_id: int,
+    up_to_message_id: int,
     limit: int = 20,
 ) -> list[dict]:
     query = """
@@ -125,6 +126,7 @@ def get_conversation_history(
             ON conversation.id = message.conversation_id
         WHERE message.conversation_id = %s
           AND conversation.user_id = %s
+          AND message.id <= %s
         ORDER BY message.created_at DESC
         LIMIT %s
     """
@@ -136,6 +138,7 @@ def get_conversation_history(
                 (
                     conversation_id,
                     user_id,
+                    up_to_message_id,
                     limit,
                 ),
             )

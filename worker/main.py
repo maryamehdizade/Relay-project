@@ -4,10 +4,10 @@ import uuid
 from datetime import datetime, timezone
 import pika
 
-from langchain_core.messages import HumanMessage
+from langchain_core.messages import AIMessage, HumanMessage
 
 from agent_graph import build_agent_graph
-from db_tools import get_user_message
+from db_tools import (get_conversation_history,get_user_message,)
 
 
 RABBITMQ_HOST = os.getenv("RABBITMQ_HOST", "rabbitmq")
@@ -62,17 +62,30 @@ def process_command(channel, command):
             "for the authenticated user."
         )
 
+    history = get_conversation_history(
+    user_id=user_id,
+    conversation_id=conversation_id,
+    up_to_message_id=message_id,
+    limit=20,
+    )
+    graph_messages = []
+    for item in history:
+        if item["role"] == "user":
+            graph_messages.append(
+                HumanMessage(content=item["content"])
+            )
+        elif item["role"] == "assistant":
+            graph_messages.append(
+                AIMessage(content=item["content"])
+            )
+    
     graph = build_agent_graph(
         user_id=user_id,
     )
 
     result = graph.invoke(
         {
-            "messages": [
-                HumanMessage(
-                    content=user_message["content"]
-                )
-            ],
+            "messages": graph_messages,
             "order_number": "",
         },
         config={
