@@ -107,3 +107,49 @@ def get_user_message(
         "message_id": message["id"],
         "content": message["content"],
     }
+
+
+def get_conversation_history(
+    user_id: int,
+    conversation_id: int,
+    limit: int = 20,
+) -> list[dict]:
+    query = """
+        SELECT
+            message.id,
+            message.role,
+            message.content,
+            message.created_at
+        FROM support_message AS message
+        INNER JOIN support_conversation AS conversation
+            ON conversation.id = message.conversation_id
+        WHERE message.conversation_id = %s
+          AND conversation.user_id = %s
+        ORDER BY message.created_at DESC
+        LIMIT %s
+    """
+
+    with get_database_connection() as connection:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                query,
+                (
+                    conversation_id,
+                    user_id,
+                    limit,
+                ),
+            )
+
+            messages = cursor.fetchall()
+
+    messages.reverse()
+
+    return [
+        {
+            "id": message["id"],
+            "role": message["role"],
+            "content": message["content"],
+            "created_at": message["created_at"].isoformat(),
+        }
+        for message in messages
+    ]
