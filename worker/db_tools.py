@@ -64,3 +64,46 @@ def get_order_status(user_id: int, order_number: str) -> dict:
         "tracking_number": order["tracking_number"],
         "created_at": order["created_at"].isoformat(),
     }
+
+def get_user_message(
+    user_id: int,
+    conversation_id: int,
+    message_id: int,
+) -> dict:
+    query = """
+        SELECT
+            message.id,
+            message.content
+        FROM support_message AS message
+        INNER JOIN support_conversation AS conversation
+            ON conversation.id = message.conversation_id
+        WHERE message.id = %s
+          AND message.conversation_id = %s
+          AND conversation.user_id = %s
+          AND message.role = 'user'
+        LIMIT 1
+    """
+
+    with get_database_connection() as connection:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                query,
+                (
+                    message_id,
+                    conversation_id,
+                    user_id,
+                ),
+            )
+
+            message = cursor.fetchone()
+
+    if message is None:
+        return {
+            "found": False,
+        }
+
+    return {
+        "found": True,
+        "message_id": message["id"],
+        "content": message["content"],
+    }
