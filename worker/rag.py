@@ -88,6 +88,7 @@ def index_documents():
                     metadatas=[
                         {
                             "source_type": "internal_document",
+                            "scope": "global",
                             "source": pdf_path.name,
                             "page": page_number,
                             "chunk_index": chunk_index,
@@ -102,6 +103,7 @@ def index_documents():
 
 def search_internal_documents(
     query: str,
+    user_id: int,
     n_results: int = 3,
 ) -> list[dict]:
     collection = get_collection()
@@ -109,6 +111,20 @@ def search_internal_documents(
     results = collection.query(
         query_texts=[query],
         n_results=n_results,
+        where={
+            "$or": [
+                {
+                    "scope": {
+                        "$eq": "global",
+                    }
+                },
+                {
+                    "user_id": {
+                        "$eq": user_id,
+                    }
+                },
+            ]
+        },
     )
 
     documents = results["documents"][0]
@@ -133,3 +149,55 @@ def search_internal_documents(
         )
 
     return matches
+
+def index_uploaded_document(
+    document_id: int,
+    user_id: int,
+    file_path: Path,
+    source_name: str,
+) -> int:
+    collection = get_collection()
+
+    reader = PdfReader(file_path)
+
+    total_chunks = 0
+
+    for page_number, page in enumerate(
+        reader.pages,
+        start=1,
+    ):
+        text = clean_text(
+            page.extract_text() or ""
+        )
+
+        chunks = chunk_text(text)
+
+        for chunk_index, chunk in enumerate(chunks):
+            chunk_id = (
+                f"user-{user_id}"
+                f"-document-{document_id}"
+                f"-p{page_number}"
+                f"-c{chunk_index}"
+            )
+
+            collection.upsert(
+                ids=[chunk_id],
+                documents=[chunk],
+                metadatas=[
+                    {
+                        "source_type": "internal_document",
+                        "scope": "user",
+                        "user_id": user_id,
+                        "document_id": document_id,
+                        "source": source_name,
+                        "page": page_number,
+                        "chunk_index": chunk_index,
+                    }
+                ],
+            )
+
+            total_chunks += 1
+
+    return total_chunks
+
+

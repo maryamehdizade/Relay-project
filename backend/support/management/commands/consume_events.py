@@ -6,7 +6,7 @@ import pika
 from django.core.management.base import BaseCommand
 from django.db import transaction
 
-from support.models import Conversation, Message
+from support.models import Conversation, Message, Document
 
 
 EVENT_EXCHANGE = "ai.events"
@@ -58,6 +58,11 @@ class Command(BaseCommand):
             queue=EVENT_QUEUE,
             routing_key="conversation.*",
             )
+        channel.queue_bind(
+            exchange=EVENT_EXCHANGE,
+            queue=EVENT_QUEUE,
+            routing_key="document.*",
+            )
 
         channel.basic_qos(prefetch_count=1)
 
@@ -95,7 +100,26 @@ class Command(BaseCommand):
                             "Assistant message saved."
                         )
                     )
+                elif event["type"] == "documents.indexed":
+                    payload = event["payload"]
 
+                    updated = Document.objects.filter(
+                        id=payload["document_id"],
+                        user_id=payload["user_id"],
+                    ).update(
+                        indexed=True,
+                    )
+
+                    if updated == 0:
+                        raise ValueError(
+                            "Document could not be found "
+                            "for the authenticated user."
+                        )
+
+                    print(
+                        "SUCCESS Document marked as indexed: "
+                        f"{payload['document_id']}"
+                    )
                 else:
                     self.stdout.write(
                         f"Ignoring unknown event type: {event_type}"

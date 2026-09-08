@@ -45,25 +45,33 @@ class InternalDocumentSearchInput(BaseModel):
     )
 
 
-@tool(
-    "search_internal_documents",
-    args_schema=InternalDocumentSearchInput,
-)
-def internal_document_search_tool(query: str) -> dict:
-    """
-    Search Relay's internal company documents.
-
-    Use this for questions about company policies,
-    product FAQs, refunds, warranty, installation,
-    maintenance, and other internal documentation.
-    """
-    matches = search_internal_documents(
-        query=query,
-        n_results=3,
+def build_internal_document_search_tool(user_id: int):
+    @tool(
+        "search_internal_documents",
+        args_schema=InternalDocumentSearchInput,
     )
+    def internal_document_search_tool(
+        query: str,
+    ) -> dict:
+        """
+        Search company-wide and authenticated-user
+        internal documents.
 
-    return {
-        "matches": matches,
-    }
+        Use this for policies, product FAQs,
+        refunds, warranties, and internal documents.
+        """
+        matches = search_internal_documents(
+            query=query,
+            user_id=user_id,
+            n_results=3,
+        )
+
+        return {
+            "matches": matches,
+        }
+
+    return internal_document_search_tool
+
+
 
 

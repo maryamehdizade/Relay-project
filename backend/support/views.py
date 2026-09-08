@@ -6,8 +6,8 @@ from rest_framework.generics import (
 )
 from rest_framework.permissions import IsAuthenticated
 
-from .models import Order, Conversation, Message
-from .serializers import (OrderSerializer, ConversationSerializer, MessageSerializer)
+from .models import Order, Conversation, Message, Document
+from .serializers import (OrderSerializer, ConversationSerializer, MessageSerializer, DocumentSerializer)
 from .messaging import build_message, publish_command
 
 import uuid
@@ -81,3 +81,33 @@ class MessageListCreateView(ListCreateAPIView):
         )
 
         publish_command(command)
+
+
+class DocumentListCreateView(ListCreateAPIView):
+    serializer_class = DocumentSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        return Document.objects.filter(
+            user=self.request.user
+        ).order_by("-uploaded_at")
+
+    def perform_create(self, serializer):
+        document = serializer.save(
+            user=self.request.user,
+            indexed=False,
+        )
+
+        correlation_id = str(uuid.uuid4())
+
+        command = build_message(
+            message_type="documents.index",
+            correlation_id=correlation_id,
+            payload={
+                "document_id": document.id,
+                "user_id": self.request.user.id,
+            },
+        )
+
+        publish_command(command)
+

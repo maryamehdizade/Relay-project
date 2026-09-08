@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from .models import Order, Conversation, Message
+from .models import Order, Conversation, Message, Document
 
 
 class OrderSerializer(serializers.ModelSerializer):
@@ -50,3 +50,22 @@ class ConversationSerializer(serializers.ModelSerializer):
             "updated_at",
             "messages",
         ]
+
+
+class DocumentSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Document
+        fields = [
+            "id",
+            "name",
+            "file",
+            "indexed",
+            "uploaded_at",
+        ]
+        read_only_fields = [
+            "id",
+            "indexed",
+            "uploaded_at",
+        ]
+
+

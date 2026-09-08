@@ -3,11 +3,13 @@ import os
 import uuid
 from datetime import datetime, timezone
 import pika
+from pathlib import Path
 
 from langchain_core.messages import AIMessage, HumanMessage
 
 from agent_graph import build_agent_graph
-from db_tools import (get_conversation_history,get_user_message,)
+from db_tools import (get_conversation_history,get_user_message,get_document_for_indexing)
+from rag import index_uploaded_document
 
 
 RABBITMQ_HOST = os.getenv("RABBITMQ_HOST", "rabbitmq")
@@ -28,6 +30,79 @@ def build_event(event_type, payload, correlation_id):
         "payload": payload,
     }
 
+def process_document_index_command(
+    channel,
+    command,
+):
+    payload = command["payload"]
+
+    user_id = payload["user_id"]
+    document_id = payload["document_id"]
+
+    document = get_document_for_indexing(
+        user_id=user_id,
+        document_id=document_id,
+    )
+
+    if not document["found"]:
+        raise ValueError(
+            "Document could not be found "
+            "for the authenticated user."
+        )
+
+    relative_path = Path(document["file"])
+
+    media_root = Path("/media").resolve()
+
+    file_path = (
+        media_root / relative_path
+    ).resolve()
+
+    if media_root not in file_path.parents:
+        raise ValueError(
+            "Invalid document path."
+        )
+
+    if file_path.suffix.lower() != ".pdf":
+        raise ValueError(
+            "Only PDF documents are currently supported."
+        )
+
+    if not file_path.exists():
+        raise FileNotFoundError(
+            f"Document file does not exist: {file_path}"
+        )
+
+    chunk_count = index_uploaded_document(
+        document_id=document_id,
+        user_id=user_id,
+        file_path=file_path,
+        source_name=document["name"],
+    )
+
+    event = build_event(
+        "documents.indexed",
+        {
+            "document_id": document_id,
+            "user_id": user_id,
+            "chunk_count": chunk_count,
+        },
+        correlation_id=command["correlation_id"],
+    )
+
+    channel.basic_publish(
+        exchange=EVENT_EXCHANGE,
+        routing_key=f"document.{document_id}",
+        body=json.dumps(event),
+        properties=pika.BasicProperties(
+            delivery_mode=2,
+        ),
+    )
+
+    print("Published document indexed event:")
+    print(json.dumps(event, indent=2))
+
+
 def process_command(channel, command):
     print("Received command:")
     print(json.dumps(command, indent=2))
@@ -40,6 +115,9 @@ def process_command(channel, command):
         f"Processing type={command_type} "
         f"correlation_id={correlation_id}"
     )
+    if command_type == "documents.index":
+        process_document_index_command(channel,command,)
+        return
 
     if command_type != "chat.generate_response":
         raise ValueError(

@@ -11,7 +11,7 @@ from langgraph.graph import END, START, StateGraph
 from langgraph.graph.message import add_messages
 from langgraph.prebuilt import ToolNode
 
-from agent_tools import (build_order_status_tool, internal_document_search_tool)
+from agent_tools import (build_order_status_tool, build_internal_document_search_tool)
 
 
 class AgentState(TypedDict):
@@ -117,6 +117,7 @@ Keep answers concise and grounded in tool results.
 
 def build_agent_graph(user_id: int):
     order_status_tool = build_order_status_tool(user_id)
+    internal_document_search_tool = (build_internal_document_search_tool(user_id))
     tools = [order_status_tool, internal_document_search_tool]
 
     api_key = os.getenv("LLM_API_KEY")

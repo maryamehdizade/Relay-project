@@ -156,3 +156,44 @@ def get_conversation_history(
         }
         for message in messages
     ]
+
+def get_document_for_indexing(
+    user_id: int,
+    document_id: int,
+) -> dict:
+    query = """
+        SELECT
+            id,
+            name,
+            file,
+            indexed
+        FROM support_document
+        WHERE id = %s
+          AND user_id = %s
+        LIMIT 1
+    """
+
+    with get_database_connection() as connection:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                query,
+                (
+                    document_id,
+                    user_id,
+                ),
+            )
+
+            document = cursor.fetchone()
+
+    if document is None:
+        return {
+            "found": False,
+        }
+
+    return {
+        "found": True,
+        "document_id": document["id"],
+        "name": document["name"],
+        "file": document["file"],
+        "indexed": document["indexed"],
+    }
