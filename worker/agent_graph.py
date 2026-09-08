@@ -11,7 +11,7 @@ from langgraph.graph import END, START, StateGraph
 from langgraph.graph.message import add_messages
 from langgraph.prebuilt import ToolNode
 
-from agent_tools import build_order_status_tool
+from agent_tools import (build_order_status_tool, internal_document_search_tool)
 
 
 class AgentState(TypedDict):
@@ -74,33 +74,46 @@ def build_order_graph(user_id: int):
 SYSTEM_PROMPT = """
 You are Relay, a customer support assistant.
 
-Use the available tools whenever customer-specific information
-is required.
+Use the available tools whenever information should come from
+a company data source.
 
-For any question about an order's status, tracking information,
-or other order-specific facts, always use the get_order_status
-tool before answering.
+For any question about a customer's specific order status,
+tracking information, or other order-specific facts, always
+use the get_order_status tool before answering.
 
-This rule also applies to follow-up questions where the order
-number can be inferred from conversation history. Do not rely
-only on an earlier assistant response for current order facts.
+This also applies to follow-up questions where the order number
+can be inferred from conversation history.
 
-Never invent order information.
+For questions about company policies, refunds, warranties,
+installation, maintenance, product information, or FAQs,
+use the search_internal_documents tool.
 
-If the tool cannot find the requested order, tell the customer
-that the order could not be found in their account.
+Base answers about company policies and product documentation
+only on the retrieved internal document content.
+
+When using internal documents, include a short source reference
+in the final answer using this format:
+
+[Internal source: filename, page N]
+
+Never invent order information or company policy.
+
+If the order tool cannot find an order, tell the customer that
+the order could not be found in their account.
+
+If the internal documents do not provide enough information,
+say that the available internal documents do not contain the
+answer.
 
 Only claim capabilities that are provided by the currently
-available tools. Do not offer to perform actions or retrieve
-information that no available tool supports.
+available tools.
 
-Keep answers concise and based on tool results.
+Keep answers concise and grounded in tool results.
 """.strip()
-
 
 def build_agent_graph(user_id: int):
     order_status_tool = build_order_status_tool(user_id)
-    tools = [order_status_tool]
+    tools = [order_status_tool, internal_document_search_tool]
 
     api_key = os.getenv("LLM_API_KEY")
     model_name = os.getenv("LLM_MODEL")
