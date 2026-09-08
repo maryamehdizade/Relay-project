@@ -3,6 +3,9 @@ from langchain_core.tools import tool
 
 from db_tools import get_order_status
 from rag import search_internal_documents
+import os
+
+from tavily import TavilyClient
 
 class OrderStatusInput(BaseModel):
     order_number: str = Field(
@@ -73,5 +76,61 @@ def build_internal_document_search_tool(user_id: int):
     return internal_document_search_tool
 
 
+class PublicWebSearchInput(BaseModel):
+    query: str = Field(
+        ...,
+        min_length=3,
+        max_length=500,
+        description=(
+            "A question that requires current or external "
+            "information from the public web."
+        ),
+    )
 
+
+@tool(
+    "search_public_web",
+    args_schema=PublicWebSearchInput,
+)
+def public_web_search_tool(query: str) -> dict:
+    """
+    Search the public web for current or external information.
+
+    Use this when the answer depends on information outside
+    the company's internal database and documents.
+    """
+    api_key = os.getenv("TAVILY_API_KEY")
+
+    if not api_key:
+        raise RuntimeError(
+            "TAVILY_API_KEY is not configured."
+        )
+
+    client = TavilyClient(
+        api_key=api_key,
+    )
+
+    response = client.search(
+        query=query,
+        search_depth="basic",
+        max_results=5,
+        include_answer=False,
+    )
+
+    results = []
+
+    for item in response.get("results", []):
+        results.append(
+            {
+                "title": item.get("title"),
+                "url": item.get("url"),
+                "content": item.get("content"),
+                "score": item.get("score"),
+                "source_type": "web",
+            }
+        )
+
+    return {
+        "results": results,
+    }
 
