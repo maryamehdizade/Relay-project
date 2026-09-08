@@ -2,7 +2,7 @@ from pydantic import BaseModel, Field
 from langchain_core.tools import tool
 
 from db_tools import get_order_status
-
+from rag import search_internal_documents
 
 class OrderStatusInput(BaseModel):
     order_number: str = Field(
@@ -31,3 +31,39 @@ def build_order_status_tool(user_id: int):
         )
 
     return order_status_tool
+
+
+class InternalDocumentSearchInput(BaseModel):
+    query: str = Field(
+        ...,
+        min_length=3,
+        max_length=500,
+        description=(
+            "A question about internal company policies, "
+            "product information, warranty, refunds, or FAQs."
+        ),
+    )
+
+
+@tool(
+    "search_internal_documents",
+    args_schema=InternalDocumentSearchInput,
+)
+def internal_document_search_tool(query: str) -> dict:
+    """
+    Search Relay's internal company documents.
+
+    Use this for questions about company policies,
+    product FAQs, refunds, warranty, installation,
+    maintenance, and other internal documentation.
+    """
+    matches = search_internal_documents(
+        query=query,
+        n_results=3,
+    )
+
+    return {
+        "matches": matches,
+    }
+
+
