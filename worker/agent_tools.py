@@ -1,7 +1,7 @@
 from pydantic import BaseModel, Field
 from langchain_core.tools import tool
 
-from db_tools import get_order_status
+from db_tools import (get_order_status, create_support_ticket)
 from rag import search_internal_documents
 import os
 
@@ -133,4 +133,43 @@ def public_web_search_tool(query: str) -> dict:
     return {
         "results": results,
     }
+
+class CreateSupportTicketInput(BaseModel):
+    subject: str = Field(
+        ...,
+        min_length=3,
+        max_length=200,
+        description="Short subject describing the customer's support issue.",
+    )
+
+    description: str = Field(
+        ...,
+        min_length=5,
+        max_length=2000,
+        description="Clear description of the customer's support issue.",
+    )
+
+
+def build_create_support_ticket_tool(user_id: int):
+    @tool(
+        "create_support_ticket",
+        args_schema=CreateSupportTicketInput,
+    )
+    def create_support_ticket_tool(
+        subject: str,
+        description: str,
+    ) -> dict:
+        """
+        Create a support ticket for the authenticated customer.
+
+        Use this only when the customer explicitly asks to open,
+        create, submit, or send a support request.
+        """
+        return create_support_ticket(
+            user_id=user_id,
+            subject=subject,
+            description=description,
+        )
+
+    return create_support_ticket_tool
 

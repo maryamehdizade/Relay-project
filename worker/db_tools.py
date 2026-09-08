@@ -197,3 +197,57 @@ def get_document_for_indexing(
         "file": document["file"],
         "indexed": document["indexed"],
     }
+
+def create_support_ticket(
+    user_id: int,
+    subject: str,
+    description: str,
+) -> dict:
+    subject = subject.strip()
+    description = description.strip()
+
+    if not subject:
+        raise ValueError("Ticket subject cannot be empty.")
+
+    if not description:
+        raise ValueError("Ticket description cannot be empty.")
+
+    with get_database_connection() as connection:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                INSERT INTO support_supportticket (
+                    user_id,
+                    subject,
+                    description,
+                    status,
+                    created_at
+                )
+                VALUES (%s, %s, %s, %s, NOW())
+                RETURNING
+                    id,
+                    subject,
+                    description,
+                    status,
+                    created_at
+                """,
+                (
+                    user_id,
+                    subject,
+                    description,
+                    "open",
+                ),
+            )
+
+            ticket = cursor.fetchone()
+
+        connection.commit()
+
+    return {
+        "created": True,
+        "ticket_id": ticket["id"],
+        "subject": ticket["subject"],
+        "description": ticket["description"],
+        "status": ticket["status"],
+        "created_at": ticket["created_at"].isoformat(),
+    }
