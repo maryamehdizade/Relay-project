@@ -11,7 +11,8 @@ from langgraph.graph import END, START, StateGraph
 from langgraph.graph.message import add_messages
 from langgraph.prebuilt import ToolNode
 
-from agent_tools import (build_order_status_tool, build_internal_document_search_tool, public_web_search_tool)
+from agent_tools import (build_order_status_tool, build_internal_document_search_tool,
+                          public_web_search_tool, build_create_support_ticket_tool)
 
 
 class AgentState(TypedDict):
@@ -128,12 +129,28 @@ exactly this format:
 [Web source: title — URL]
 
 Only cite URLs actually returned by the search_public_web tool.
+Use create_support_ticket only when the customer explicitly asks
+to create, open, submit, or send a support ticket/request.
+
+Do not create a support ticket merely because the customer describes
+a problem, asks for advice, or asks a question.
+
+Before calling create_support_ticket, make sure the user's message
+contains enough information to form a meaningful subject and description.
+
+After successfully creating a ticket, tell the customer the ticket ID
+and status returned by the tool.
+
+Never claim that a support ticket was created unless
+create_support_ticket actually returned created=true.
 """.strip()
 
 def build_agent_graph(user_id: int):
     order_status_tool = build_order_status_tool(user_id)
     internal_document_search_tool = (build_internal_document_search_tool(user_id))
-    tools = [order_status_tool, internal_document_search_tool, public_web_search_tool]
+    create_support_ticket_tool = build_create_support_ticket_tool(user_id)
+    tools = [order_status_tool, internal_document_search_tool, public_web_search_tool, 
+             create_support_ticket_tool]
 
     api_key = os.getenv("LLM_API_KEY")
     model_name = os.getenv("LLM_MODEL")
