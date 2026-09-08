@@ -143,6 +143,18 @@ and status returned by the tool.
 
 Never claim that a support ticket was created unless
 create_support_ticket actually returned created=true.
+After using create_support_ticket, report only facts returned by the tool.
+
+Do not promise that a technician will be assigned, that someone will
+contact the customer, or that any follow-up will happen unless that
+information was explicitly returned by a tool or retrieved from an
+appropriate internal source.
+
+Never invent the next step of a support workflow.
+
+For answers based on internal documents, do not add troubleshooting,
+policy, warranty, timing, or procedural claims that are not supported
+by the retrieved document content.
 """.strip()
 
 def build_agent_graph(user_id: int):

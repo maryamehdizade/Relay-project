@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 import pika
 from pathlib import Path
 
-from langchain_core.messages import AIMessage, HumanMessage
+from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
 from agent_graph import build_agent_graph
 from db_tools import (get_conversation_history,get_user_message,get_document_for_indexing)
@@ -102,6 +102,62 @@ def process_document_index_command(
     print("Published document indexed event:")
     print(json.dumps(event, indent=2))
 
+def get_response_content(graph_result: dict) -> str:
+    messages = graph_result["messages"]
+
+    # Map tool-call IDs to their actual tool names.
+    tool_names_by_id = {}
+
+    for message in messages:
+        if isinstance(message, AIMessage):
+            for tool_call in getattr(message, "tool_calls", []) or []:
+                tool_call_id = tool_call.get("id")
+                tool_name = tool_call.get("name")
+
+                if tool_call_id and tool_name:
+                    tool_names_by_id[tool_call_id] = tool_name
+
+    # If a real action tool ran successfully, construct the
+    # customer-facing response directly from its result.
+    for message in reversed(messages):
+        if not isinstance(message, ToolMessage):
+            continue
+
+        tool_name = getattr(message, "name", None)
+
+        if not tool_name:
+            tool_name = tool_names_by_id.get(
+                getattr(message, "tool_call_id", None)
+            )
+
+        if tool_name != "create_support_ticket":
+            continue
+
+        tool_result = message.content
+
+        if isinstance(tool_result, str):
+            tool_result = json.loads(tool_result)
+
+        if tool_result.get("created") is True:
+            status = str(
+                tool_result["status"]
+            ).capitalize()
+
+            return (
+                "Your support ticket has been created successfully.\n\n"
+                f"- **Ticket ID:** {tool_result['ticket_id']}\n"
+                f"- **Subject:** {tool_result['subject']}\n"
+                f"- **Status:** {status}"
+            )
+
+    final_message = messages[-1]
+
+    if not isinstance(final_message, AIMessage):
+        raise ValueError(
+            "Agent did not produce a final assistant message."
+        )
+
+    return str(final_message.content)
 
 def process_command(channel, command):
     print("Received command:")
@@ -171,12 +227,12 @@ def process_command(channel, command):
         },
     )
 
-    assistant_message = result["messages"][-1]
-
-    response_content = assistant_message.content
+    response_content = get_response_content(result)
 
     if not isinstance(response_content, str):
-        response_content = str(response_content)
+        response_content = str(
+            response_content
+        )
 
     event = build_event(
         "chat.response.generated",
