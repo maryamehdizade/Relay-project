@@ -11,7 +11,7 @@ from langgraph.graph import END, START, StateGraph
 from langgraph.graph.message import add_messages
 from langgraph.prebuilt import ToolNode
 
-from agent_tools import (build_order_status_tool, build_internal_document_search_tool)
+from agent_tools import (build_order_status_tool, build_internal_document_search_tool, public_web_search_tool)
 
 
 class AgentState(TypedDict):
@@ -113,12 +113,27 @@ schedule, or perform any action unless an available action
 tool explicitly supports that operation.
 
 Keep answers concise and grounded in tool results.
+
+For current events, recent external developments, or information
+that is outside the company's internal data and documents,
+use the search_public_web tool.
+
+Do not use public web search for customer-specific order data
+or for company policies when the appropriate internal tool
+can answer the question.
+
+When using public web results, include source references using
+exactly this format:
+
+[Web source: title — URL]
+
+Only cite URLs actually returned by the search_public_web tool.
 """.strip()
 
 def build_agent_graph(user_id: int):
     order_status_tool = build_order_status_tool(user_id)
     internal_document_search_tool = (build_internal_document_search_tool(user_id))
-    tools = [order_status_tool, internal_document_search_tool]
+    tools = [order_status_tool, internal_document_search_tool, public_web_search_tool]
 
     api_key = os.getenv("LLM_API_KEY")
     model_name = os.getenv("LLM_MODEL")
