@@ -59,6 +59,7 @@ services:
       - .env
     volumes:
       - ./worker:/app
+      - ./documents:/documents:ro
     depends_on:
       rabbitmq:
         condition: service_healthy
