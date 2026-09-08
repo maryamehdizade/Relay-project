@@ -44,6 +44,7 @@ services:
       - .env
     volumes:
       - ./backend:/app
+      - documents_data:/media
     ports:
       - "8000:8000"
     depends_on:
@@ -60,6 +61,7 @@ services:
     volumes:
       - ./worker:/app
       - ./documents:/documents:ro
+      - documents_data:/media:ro
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -91,3 +93,4 @@ volumes:
   postgres_data:
   rabbitmq_data:
   chroma_data:
+  documents_data:
