@@ -267,6 +267,69 @@ def process_command(channel, command):
     print("Published event:")
     print(json.dumps(event, indent=2))
 
+def retry_or_dead_letter(
+    channel,
+    method,
+    properties,
+    body,
+):
+    headers = dict(
+        (properties.headers or {})
+    )
+
+    retry_count = int(
+        headers.get("x-retry-count", 0)
+    )
+
+    if retry_count < len(RETRY_QUEUES):
+        retry_queue, delay_ms = RETRY_QUEUES[
+            retry_count
+        ]
+
+        headers["x-retry-count"] = (
+            retry_count + 1
+        )
+
+        channel.basic_publish(
+            exchange="",
+            routing_key=retry_queue,
+            body=body,
+            properties=pika.BasicProperties(
+                delivery_mode=2,
+                headers=headers,
+            ),
+        )
+
+        print(
+            "Command failed. "
+            f"Retry {retry_count + 1}/"
+            f"{len(RETRY_QUEUES)} "
+            f"scheduled in {delay_ms // 1000}s."
+        )
+
+    else:
+        headers["x-retry-count"] = retry_count
+
+        channel.basic_publish(
+            exchange="",
+            routing_key=DEAD_LETTER_QUEUE,
+            body=body,
+            properties=pika.BasicProperties(
+                delivery_mode=2,
+                headers=headers,
+            ),
+        )
+
+        print(
+            "Command exhausted retries. "
+            f"Moved to '{DEAD_LETTER_QUEUE}'."
+        )
+
+    # ACK the original message because we have safely
+    # republished it either to a retry queue or dead queue.
+    channel.basic_ack(
+        delivery_tag=method.delivery_tag,
+    )
 
 
 def on_command(channel, method, properties, body):
@@ -282,9 +345,11 @@ def on_command(channel, method, properties, body):
     except Exception as exc:
         print(f"Command processing failed: {exc}")
 
-        channel.basic_nack(
-            delivery_tag=method.delivery_tag,
-            requeue=True,
+        retry_or_dead_letter(
+            channel=channel,
+            method=method,
+            properties=properties,
+            body=body,
         )
 
 
