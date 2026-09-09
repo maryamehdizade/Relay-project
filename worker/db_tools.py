@@ -227,6 +227,7 @@ def create_support_ticket(
                 )
                 VALUES (%s, %s, %s, %s, %s, NOW())
                 ON CONFLICT (correlation_id)
+                DO NOTHING
                 RETURNING
                     id,
                     subject,
@@ -282,7 +283,7 @@ def create_support_ticket(
 
     return {
         "success": True,
-        "created": True,
+        "created": not idempotent_replay,
         "idempotent_replay": idempotent_replay,
         "ticket_id": ticket["id"],
         "subject": ticket["subject"],

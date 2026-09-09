@@ -20,6 +20,14 @@ RABBITMQ_PASSWORD = os.getenv("RABBITMQ_DEFAULT_PASS", "guest")
 COMMAND_QUEUE = "ai.commands"
 EVENT_EXCHANGE = "ai.events"
 
+DEAD_LETTER_QUEUE = "ai.commands.dead"
+
+RETRY_QUEUES = [
+    ("ai.commands.retry.5s", 5_000),
+    ("ai.commands.retry.10s", 10_000),
+    ("ai.commands.retry.20s", 20_000),
+]
+
 def build_event(event_type, payload, correlation_id):
     return {
         "version": "1.0",
@@ -298,6 +306,22 @@ def main():
 
     channel.queue_declare(
         queue=COMMAND_QUEUE,
+        durable=True,
+    )
+
+    for retry_queue, delay_ms in RETRY_QUEUES:
+        channel.queue_declare(
+            queue=retry_queue,
+            durable=True,
+            arguments={
+                "x-message-ttl": delay_ms,
+                "x-dead-letter-exchange": "",
+                "x-dead-letter-routing-key": COMMAND_QUEUE,
+            },
+        )
+
+    channel.queue_declare(
+        queue=DEAD_LETTER_QUEUE,
         durable=True,
     )
 
