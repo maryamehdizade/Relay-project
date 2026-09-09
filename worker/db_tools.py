@@ -200,6 +200,7 @@ def get_document_for_indexing(
 
 def create_support_ticket(
     user_id: int,
+    correlation_id: str,
     subject: str,
     description: str,
 ) -> dict:
@@ -221,14 +222,17 @@ def create_support_ticket(
                     subject,
                     description,
                     status,
+                    correlation_id,
                     created_at
                 )
-                VALUES (%s, %s, %s, %s, NOW())
+                VALUES (%s, %s, %s, %s, %s, NOW())
+                ON CONFLICT (correlation_id)
                 RETURNING
                     id,
                     subject,
                     description,
                     status,
+                    correlation_id,
                     created_at
                 """,
                 (
@@ -236,18 +240,56 @@ def create_support_ticket(
                     subject,
                     description,
                     "open",
+                    correlation_id,
                 ),
             )
 
             ticket = cursor.fetchone()
 
+            idempotent_replay = False
+
+            if ticket is None:
+                idempotent_replay = True
+
+                cursor.execute(
+                    """
+                    SELECT
+                        id,
+                        subject,
+                        description,
+                        status,
+                        correlation_id,
+                        created_at
+                    FROM support_supportticket
+                    WHERE correlation_id = %s
+                      AND user_id = %s
+                    """,
+                    (
+                        correlation_id,
+                        user_id,
+                    ),
+                )
+
+                ticket = cursor.fetchone()
+
+                if ticket is None:
+                    raise ValueError(
+                        "Correlation ID already exists "
+                        "for a different user."
+                    )
+
         connection.commit()
 
     return {
+        "success": True,
         "created": True,
+        "idempotent_replay": idempotent_replay,
         "ticket_id": ticket["id"],
         "subject": ticket["subject"],
         "description": ticket["description"],
         "status": ticket["status"],
+        "correlation_id": str(
+            ticket["correlation_id"]
+        ),
         "created_at": ticket["created_at"].isoformat(),
     }
