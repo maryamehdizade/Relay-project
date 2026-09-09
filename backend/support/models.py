@@ -98,6 +98,9 @@ class SupportTicket(models.Model):
         choices=Status.choices,
         default=Status.OPEN,
     )
+
+    correlation_id = models.UUIDField(null=True,blank=True,unique=True,)
+    
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
