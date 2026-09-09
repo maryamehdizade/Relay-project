@@ -42,6 +42,17 @@ class Conversation(models.Model):
 
 
 class Message(models.Model):
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=[
+                    "conversation",
+                    "correlation_id",
+                    "role",
+                ],
+                name="unique_message_correlation_role",
+            ),
+        ]
     class Role(models.TextChoices):
         USER = "user", "User"
         ASSISTANT = "assistant", "Assistant"
@@ -100,7 +111,7 @@ class SupportTicket(models.Model):
     )
 
     correlation_id = models.UUIDField(null=True,blank=True,unique=True,)
-    
+
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
