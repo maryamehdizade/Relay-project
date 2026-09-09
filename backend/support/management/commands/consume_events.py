@@ -12,6 +12,13 @@ from support.models import Conversation, Message, Document
 EVENT_EXCHANGE = "ai.events"
 EVENT_QUEUE = "ai.events.persistence"
 
+EVENT_DEAD_LETTER_QUEUE = "ai.events.persistence.dead"
+
+EVENT_RETRY_QUEUES = [
+    ("ai.events.persistence.retry.5s", 5_000),
+    ("ai.events.persistence.retry.10s", 10_000),
+    ("ai.events.persistence.retry.20s", 20_000),
+]
 
 class Command(BaseCommand):
     help = "Consume AI events from RabbitMQ"
@@ -66,6 +73,23 @@ class Command(BaseCommand):
             durable=True,
         )
 
+        for retry_queue, delay_ms in EVENT_RETRY_QUEUES:
+            channel.queue_declare(
+        queue=retry_queue,
+        durable=True,
+        arguments={
+            "x-message-ttl": delay_ms,
+            "x-dead-letter-exchange": "",
+            "x-dead-letter-routing-key": EVENT_QUEUE,
+        },
+    )
+        
+        channel.queue_declare(
+            queue=EVENT_DEAD_LETTER_QUEUE,
+            durable=True,
+        )
+
+
         channel.queue_bind(
             exchange=EVENT_EXCHANGE,
             queue=EVENT_QUEUE,
@@ -81,7 +105,82 @@ class Command(BaseCommand):
         channel.basic_qos(
             prefetch_count=1
         )
-
+        def retry_or_dead_letter_event(
+            channel,
+            method,
+            properties,
+            body,
+        ):
+            headers = dict(
+                properties.headers or {}
+            )
+        
+            retry_count = int(
+                headers.get(
+                    "x-event-retry-count",
+                    0,
+                )
+            )
+        
+            if retry_count < len(
+                EVENT_RETRY_QUEUES
+            ):
+                retry_queue, delay_ms = (
+                    EVENT_RETRY_QUEUES[
+                        retry_count
+                    ]
+                )
+        
+                headers[
+                    "x-event-retry-count"
+                ] = retry_count + 1
+        
+                channel.basic_publish(
+                    exchange="",
+                    routing_key=retry_queue,
+                    body=body,
+                    properties=pika.BasicProperties(
+                        delivery_mode=2,
+                        headers=headers,
+                    ),
+                )
+        
+                self.stdout.write(
+                    self.style.WARNING(
+                        "Event failed. "
+                        f"Retry {retry_count + 1}/"
+                        f"{len(EVENT_RETRY_QUEUES)} "
+                        f"scheduled in "
+                        f"{delay_ms // 1000}s."
+                    )
+                )
+        
+            else:
+                channel.basic_publish(
+                    exchange="",
+                    routing_key=(
+                        EVENT_DEAD_LETTER_QUEUE
+                    ),
+                    body=body,
+                    properties=pika.BasicProperties(
+                        delivery_mode=2,
+                        headers=headers,
+                    ),
+                )
+        
+                self.stderr.write(
+                    self.style.ERROR(
+                        "Event exhausted retries. "
+                        f"Moved to "
+                        f"'{EVENT_DEAD_LETTER_QUEUE}'."
+                    )
+                )
+        
+            channel.basic_ack(
+                delivery_tag=(
+                    method.delivery_tag
+                )
+            )
         def on_event(
             channel,
             method,
@@ -221,11 +320,11 @@ class Command(BaseCommand):
                     )
                 )
 
-                channel.basic_nack(
-                    delivery_tag=(
-                        method.delivery_tag
-                    ),
-                    requeue=True,
+                retry_or_dead_letter_event(
+                    channel=channel,
+                    method=method,
+                    properties=properties,
+                    body=body,
                 )
 
             finally:
