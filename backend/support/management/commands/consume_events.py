@@ -27,26 +27,39 @@ class Command(BaseCommand):
         once = options["once"]
 
         credentials = pika.PlainCredentials(
-            os.getenv("RABBITMQ_DEFAULT_USER", "guest"),
-            os.getenv("RABBITMQ_DEFAULT_PASS", "guest"),
+            os.getenv(
+                "RABBITMQ_DEFAULT_USER",
+                "guest",
+            ),
+            os.getenv(
+                "RABBITMQ_DEFAULT_PASS",
+                "guest",
+            ),
         )
 
         connection = pika.BlockingConnection(
             pika.ConnectionParameters(
-                host=os.getenv("RABBITMQ_HOST", "rabbitmq"),
-                port=int(os.getenv("RABBITMQ_PORT", "5672")),
+                host=os.getenv(
+                    "RABBITMQ_HOST",
+                    "rabbitmq",
+                ),
+                port=int(
+                    os.getenv(
+                        "RABBITMQ_PORT",
+                        "5672",
+                    )
+                ),
                 credentials=credentials,
             )
         )
 
         channel = connection.channel()
 
-        channel.exchange_declare( 
+        channel.exchange_declare(
             exchange=EVENT_EXCHANGE,
             exchange_type="topic",
             durable=True,
         )
-
 
         channel.queue_declare(
             queue=EVENT_QUEUE,
@@ -57,87 +70,161 @@ class Command(BaseCommand):
             exchange=EVENT_EXCHANGE,
             queue=EVENT_QUEUE,
             routing_key="conversation.*",
-            )
+        )
+
         channel.queue_bind(
             exchange=EVENT_EXCHANGE,
             queue=EVENT_QUEUE,
             routing_key="document.*",
-            )
+        )
 
-        channel.basic_qos(prefetch_count=1)
+        channel.basic_qos(
+            prefetch_count=1
+        )
 
-        def on_event(channel, method, properties, body):
+        def on_event(
+            channel,
+            method,
+            properties,
+            body,
+        ):
             try:
                 event = json.loads(body)
 
-                self.stdout.write("Received event:")
                 self.stdout.write(
-                    json.dumps(event, indent=2)
+                    "Received event:"
+                )
+
+                self.stdout.write(
+                    json.dumps(
+                        event,
+                        indent=2,
+                    )
                 )
 
                 event_type = event.get("type")
 
-                if event_type == "chat.response.generated":
+                
+                # Chat response event
+                
+                if (
+                    event_type
+                    == "chat.response.generated"
+                ):
                     payload = event["payload"]
 
                     with transaction.atomic():
-                        conversation = Conversation.objects.get(
-                            id=payload["conversation_id"],
-                            user_id=payload["user_id"],
+                        conversation = (
+                            Conversation.objects.get(
+                                id=payload[
+                                    "conversation_id"
+                                ],
+                                user_id=payload[
+                                    "user_id"
+                                ],
+                            )
                         )
 
-                        Message.objects.create(
-                            conversation=conversation,
-                            correlation_id=event["correlation_id"],
-                            role=Message.Role.ASSISTANT,
-                            content=payload["content"],
+                        message, created = (
+                            Message.objects.get_or_create(
+                                conversation=conversation,
+                                correlation_id=event[
+                                    "correlation_id"
+                                ],
+                                role=(
+                                    Message.Role.ASSISTANT
+                                ),
+                                defaults={
+                                    "content": payload[
+                                        "content"
+                                    ],
+                                },
+                            )
                         )
 
-                        conversation.save()
+                        if created:
+                            conversation.save()
 
-                    self.stdout.write(
-                        self.style.SUCCESS(
-                            "Assistant message saved."
+                    if created:
+                        self.stdout.write(
+                            self.style.SUCCESS(
+                                "Assistant message saved."
+                            )
                         )
-                    )
-                elif event["type"] == "documents.indexed":
+                    else:
+                        self.stdout.write(
+                            self.style.WARNING(
+                                "Duplicate assistant "
+                                "event ignored for "
+                                "correlation_id="
+                                f"{event['correlation_id']}"
+                            )
+                        )
+
+                
+                # Document indexed event
+                
+                elif (
+                    event_type
+                    == "documents.indexed"
+                ):
                     payload = event["payload"]
 
-                    updated = Document.objects.filter(
-                        id=payload["document_id"],
-                        user_id=payload["user_id"],
-                    ).update(
-                        indexed=True,
+                    updated = (
+                        Document.objects.filter(
+                            id=payload[
+                                "document_id"
+                            ],
+                            user_id=payload[
+                                "user_id"
+                            ],
+                        ).update(
+                            indexed=True
+                        )
                     )
 
                     if updated == 0:
                         raise ValueError(
-                            "Document could not be found "
-                            "for the authenticated user."
+                            "Document could not be "
+                            "found for the user."
                         )
 
-                    print(
-                        "SUCCESS Document marked as indexed: "
-                        f"{payload['document_id']}"
-                    )
-                else:
                     self.stdout.write(
-                        f"Ignoring unknown event type: {event_type}"
+                        self.style.SUCCESS(
+                            "Document marked as "
+                            "indexed: "
+                            f"{payload['document_id']}"
+                        )
                     )
 
+            
+                # Unknown event
+                
+                else:
+                    self.stdout.write(
+                        f"Ignoring unknown event "
+                        f"type: {event_type}"
+                    )
+
+                # ACK only after successful handling
                 channel.basic_ack(
-                    delivery_tag=method.delivery_tag
+                    delivery_tag=(
+                        method.delivery_tag
+                    )
                 )
 
             except Exception as exc:
                 self.stderr.write(
                     self.style.ERROR(
-                        f"Event processing failed: {exc}"
+                        "Event processing failed: "
+                        f"{exc}"
                     )
                 )
 
                 channel.basic_nack(
-                    delivery_tag=method.delivery_tag,
+                    delivery_tag=(
+                        method.delivery_tag
+                    ),
                     requeue=True,
                 )
 
@@ -152,11 +239,13 @@ class Command(BaseCommand):
         )
 
         self.stdout.write(
-            f"Waiting for events on '{EVENT_QUEUE}'..."
+            f"Waiting for events on "
+            f"'{EVENT_QUEUE}'..."
         )
 
         try:
             channel.start_consuming()
+
         finally:
             if connection.is_open:
                 connection.close()
