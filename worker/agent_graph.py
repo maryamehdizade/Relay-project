@@ -157,10 +157,10 @@ policy, warranty, timing, or procedural claims that are not supported
 by the retrieved document content.
 """.strip()
 
-def build_agent_graph(user_id: int):
+def build_agent_graph(user_id: int, correlation_id: str,):
     order_status_tool = build_order_status_tool(user_id)
     internal_document_search_tool = (build_internal_document_search_tool(user_id))
-    create_support_ticket_tool = build_create_support_ticket_tool(user_id)
+    create_support_ticket_tool = build_create_support_ticket_tool(user_id, correlation_id)
     tools = [order_status_tool, internal_document_search_tool, public_web_search_tool, 
              create_support_ticket_tool]
 

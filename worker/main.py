@@ -138,7 +138,7 @@ def get_response_content(graph_result: dict) -> str:
         if isinstance(tool_result, str):
             tool_result = json.loads(tool_result)
 
-        if tool_result.get("created") is True:
+        if tool_result.get("success") is True:
             status = str(
                 tool_result["status"]
             ).capitalize()
@@ -215,6 +215,7 @@ def process_command(channel, command):
     
     graph = build_agent_graph(
         user_id=user_id,
+        correlation_id=correlation_id,
     )
 
     result = graph.invoke(
