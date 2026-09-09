@@ -150,7 +150,7 @@ class CreateSupportTicketInput(BaseModel):
     )
 
 
-def build_create_support_ticket_tool(user_id: int):
+def build_create_support_ticket_tool(user_id: int, correlation_id: str,):
     @tool(
         "create_support_ticket",
         args_schema=CreateSupportTicketInput,
@@ -167,6 +167,7 @@ def build_create_support_ticket_tool(user_id: int):
         """
         return create_support_ticket(
             user_id=user_id,
+            correlation_id=correlation_id,
             subject=subject,
             description=description,
         )
