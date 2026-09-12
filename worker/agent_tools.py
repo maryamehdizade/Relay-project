@@ -62,7 +62,7 @@ class InternalDocumentSearchInput(BaseModel):
     )
 
 
-def build_internal_document_search_tool(user_id: int):
+def build_internal_document_search_tool(user_id: int, langfuse,):
     @tool(
         "search_internal_documents",
         args_schema=InternalDocumentSearchInput,
@@ -77,15 +77,29 @@ def build_internal_document_search_tool(user_id: int):
         Use this for policies, product FAQs,
         refunds, warranties, and internal documents.
         """
-        matches = search_internal_documents(
-            query=query,
-            user_id=user_id,
-            n_results=3,
-        )
-
-        return {
-            "matches": matches,
-        }
+        with langfuse.start_as_current_span(
+            name="tool_search_internal_documents",
+            input={
+                "query": query,
+                "user_id": user_id,
+            },
+        ) as span:
+        
+            matches = search_internal_documents(
+                query=query,
+                user_id=user_id,
+                n_results=3,
+            )
+        
+            result = {
+                "matches": matches,
+            }
+        
+            span.update(
+                output=result,
+            )
+        
+            return result
 
     return internal_document_search_tool
 
@@ -102,51 +116,69 @@ class PublicWebSearchInput(BaseModel):
     )
 
 
-@tool(
-    "search_public_web",
-    args_schema=PublicWebSearchInput,
-)
-def public_web_search_tool(query: str) -> dict:
-    """
-    Search the public web for current or external information.
+def build_public_web_search_tool(langfuse):
 
-    Use this when the answer depends on information outside
-    the company's internal database and documents.
-    """
-    api_key = os.getenv("TAVILY_API_KEY")
-
-    if not api_key:
-        raise RuntimeError(
-            "TAVILY_API_KEY is not configured."
-        )
-
-    client = TavilyClient(
-        api_key=api_key,
+    @tool(
+        "search_public_web",
+        args_schema=PublicWebSearchInput,
     )
+    def public_web_search_tool(query: str) -> dict:
+        """
+        Search the public web for current or external information.
 
-    response = client.search(
-        query=query,
-        search_depth="basic",
-        max_results=5,
-        include_answer=False,
-    )
+        Use this when the answer depends on information outside
+        the company's internal database and documents.
+        """
 
-    results = []
+        with langfuse.start_as_current_span(
+            name="tool_search_public_web",
+            input={
+                "query": query,
+            },
+        ) as span:
 
-    for item in response.get("results", []):
-        results.append(
-            {
-                "title": item.get("title"),
-                "url": item.get("url"),
-                "content": item.get("content"),
-                "score": item.get("score"),
-                "source_type": "web",
+            api_key = os.getenv("TAVILY_API_KEY")
+
+            if not api_key:
+                raise RuntimeError(
+                    "TAVILY_API_KEY is not configured."
+                )
+
+            client = TavilyClient(
+                api_key=api_key,
+            )
+
+            response = client.search(
+                query=query,
+                search_depth="basic",
+                max_results=5,
+                include_answer=False,
+            )
+
+            results = []
+
+            for item in response.get("results", []):
+                results.append(
+                    {
+                        "title": item.get("title"),
+                        "url": item.get("url"),
+                        "content": item.get("content"),
+                        "score": item.get("score"),
+                        "source_type": "web",
+                    }
+                )
+
+            result = {
+                "results": results,
             }
-        )
 
-    return {
-        "results": results,
-    }
+            span.update(
+                output=result,
+            )
+
+            return result
+
+    return public_web_search_tool
 
 class CreateSupportTicketInput(BaseModel):
     subject: str = Field(
@@ -164,7 +196,7 @@ class CreateSupportTicketInput(BaseModel):
     )
 
 
-def build_create_support_ticket_tool(user_id: int, correlation_id: str,):
+def build_create_support_ticket_tool(user_id: int, correlation_id: str, langfuse,):
     @tool(
         "create_support_ticket",
         args_schema=CreateSupportTicketInput,
@@ -179,12 +211,27 @@ def build_create_support_ticket_tool(user_id: int, correlation_id: str,):
         Use this only when the customer explicitly asks to open,
         create, submit, or send a support request.
         """
-        return create_support_ticket(
-            user_id=user_id,
-            correlation_id=correlation_id,
-            subject=subject,
-            description=description,
-        )
+        with langfuse.start_as_current_span(
+            name="tool_create_support_ticket",
+            input={
+                "subject": subject,
+                "description": description,
+                "user_id": user_id,
+            },
+        ) as span:
+        
+            result = create_support_ticket(
+                user_id=user_id,
+                correlation_id=correlation_id,
+                subject=subject,
+                description=description,
+            )
+        
+            span.update(
+                output=result,
+            )
+        
+            return result
 
     return create_support_ticket_tool
 
