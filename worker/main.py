@@ -11,6 +11,7 @@ from agent_graph import build_agent_graph
 from db_tools import (get_conversation_history,get_user_message,get_document_for_indexing)
 from rag import index_uploaded_document
 
+from logger import logger
 
 RABBITMQ_HOST = os.getenv("RABBITMQ_HOST", "rabbitmq")
 RABBITMQ_PORT = int(os.getenv("RABBITMQ_PORT", "5672"))
@@ -168,17 +169,25 @@ def get_response_content(graph_result: dict) -> str:
     return str(final_message.content)
 
 def process_command(channel, command):
-    print("Received command:")
-    print(json.dumps(command, indent=2))
 
     correlation_id = command["correlation_id"]
     command_type = command["type"]
     payload = command["payload"]
 
-    print(
-        f"Processing type={command_type} "
-        f"correlation_id={correlation_id}"
+    logger.info(
+        "command_received",
+        extra={
+            "correlation_id": correlation_id,
+        },
     )
+
+    logger.info(
+        f"processing_command type={command_type}",
+        extra={
+            "correlation_id": correlation_id,
+        },
+    )
+
     if command_type == "documents.index":
         process_document_index_command(channel,command,)
         return
@@ -225,6 +234,12 @@ def process_command(channel, command):
         user_id=user_id,
         correlation_id=correlation_id,
     )
+    logger.info(
+        "agent_execution_started",
+        extra={
+            "correlation_id": correlation_id,
+        },
+    )
 
     result = graph.invoke(
         {
@@ -236,6 +251,12 @@ def process_command(channel, command):
         },
     )
 
+    logger.info(
+        "agent_execution_finished",
+        extra={
+            "correlation_id": correlation_id,
+        },
+    )
     response_content = get_response_content(result)
 
     if not isinstance(response_content, str):
@@ -264,8 +285,12 @@ def process_command(channel, command):
         ),
     )
 
-    print("Published event:")
-    print(json.dumps(event, indent=2))
+    logger.info(
+        "response_event_published",
+        extra={
+            "correlation_id": correlation_id,
+        },
+    )
 
 def retry_or_dead_letter(
     channel,
@@ -276,6 +301,16 @@ def retry_or_dead_letter(
     headers = dict(
         (properties.headers or {})
     )
+
+    try:
+        command = json.loads(body)
+    
+        headers["correlation_id"] = (
+            command["correlation_id"]
+        )
+    
+    except Exception:
+        pass
 
     retry_count = int(
         headers.get("x-retry-count", 0)
@@ -300,11 +335,14 @@ def retry_or_dead_letter(
             ),
         )
 
-        print(
-            "Command failed. "
-            f"Retry {retry_count + 1}/"
-            f"{len(RETRY_QUEUES)} "
-            f"scheduled in {delay_ms // 1000}s."
+        logger.warning(
+            f"command_retry_scheduled retry={retry_count + 1}/{len(RETRY_QUEUES)} delay={delay_ms // 1000}s",
+            extra={
+                "correlation_id": headers.get(
+                    "correlation_id",
+                    "unknown",
+                ),
+            },
         )
 
     else:
@@ -320,9 +358,14 @@ def retry_or_dead_letter(
             ),
         )
 
-        print(
-            "Command exhausted retries. "
-            f"Moved to '{DEAD_LETTER_QUEUE}'."
+        logger.error(
+            "command_moved_to_dead_letter",
+            extra={
+                "correlation_id": headers.get(
+                    "correlation_id",
+                    "unknown",
+                ),
+            },
         )
 
     # ACK the original message because we have safely
@@ -343,8 +386,16 @@ def on_command(channel, method, properties, body):
         )
 
     except Exception as exc:
-        print(f"Command processing failed: {exc}")
-
+        logger.error(
+            f"command_processing_failed error={exc}",
+            extra={
+                "correlation_id": (
+                    command.get("correlation_id")
+                    if "command" in locals()
+                    else "unknown"
+                ),
+            },
+        )
         retry_or_dead_letter(
             channel=channel,
             method=method,
@@ -404,8 +455,19 @@ def main():
         auto_ack=False,
     )
 
-    print("AI worker connected to RabbitMQ.")
-    print(f"Waiting for commands on '{COMMAND_QUEUE}'...")
+    logger.info(
+        "worker_connected_to_rabbitmq",
+        extra={
+            "correlation_id": "system",
+        },
+    )
+    
+    logger.info(
+        f"waiting_for_commands queue={COMMAND_QUEUE}",
+        extra={
+            "correlation_id": "system",
+        },
+    )
 
     try:
         channel.start_consuming()
