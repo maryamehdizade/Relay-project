@@ -73,6 +73,7 @@ def build_order_graph(user_id: int):
     return builder.compile()
 
 SYSTEM_PROMPT = """
+
 You are Relay, a customer support assistant.
 
 Use the available tools whenever information should come from
@@ -157,7 +158,8 @@ policy, warranty, timing, or procedural claims that are not supported
 by the retrieved document content.
 """.strip()
 
-def build_agent_graph(user_id: int, correlation_id: str,):
+
+def build_agent_graph(user_id: int, correlation_id: str,langfuse,):
     order_status_tool = build_order_status_tool(user_id)
     internal_document_search_tool = (build_internal_document_search_tool(user_id))
     create_support_ticket_tool = build_create_support_ticket_tool(user_id, correlation_id)
@@ -184,13 +186,24 @@ def build_agent_graph(user_id: int, correlation_id: str,):
     llm_with_tools = llm.bind_tools(tools)
 
     def call_model(state: AgentState):
+
         messages = [
             SystemMessage(content=SYSTEM_PROMPT),
             *state["messages"],
         ]
-
-        response = llm_with_tools.invoke(messages)
-
+    
+        with langfuse.start_as_current_generation(
+                name="relay_llm_call",
+                model=model_name,
+                input=messages,
+            ) as generation:
+            
+                response = llm_with_tools.invoke(messages)
+            
+                generation.update(
+                    output=response.content,
+                )
+    
         return {
             "messages": [response],
         }

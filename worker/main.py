@@ -12,6 +12,7 @@ from db_tools import (get_conversation_history,get_user_message,get_document_for
 from rag import index_uploaded_document
 
 from logger import logger
+from langfuse import Langfuse
 
 RABBITMQ_HOST = os.getenv("RABBITMQ_HOST", "rabbitmq")
 RABBITMQ_PORT = int(os.getenv("RABBITMQ_PORT", "5672"))
@@ -20,6 +21,18 @@ RABBITMQ_PASSWORD = os.getenv("RABBITMQ_DEFAULT_PASS", "guest")
 
 COMMAND_QUEUE = "ai.commands"
 EVENT_EXCHANGE = "ai.events"
+
+langfuse = Langfuse(
+    public_key=os.getenv(
+        "LANGFUSE_PUBLIC_KEY"
+    ),
+    secret_key=os.getenv(
+        "LANGFUSE_SECRET_KEY"
+    ),
+    host=os.getenv(
+        "LANGFUSE_HOST"
+    ),
+)
 
 DEAD_LETTER_QUEUE = "ai.commands.dead"
 
@@ -233,6 +246,7 @@ def process_command(channel, command):
     graph = build_agent_graph(
         user_id=user_id,
         correlation_id=correlation_id,
+        langfuse = langfuse,
     )
     logger.info(
         "agent_execution_started",
@@ -240,16 +254,34 @@ def process_command(channel, command):
             "correlation_id": correlation_id,
         },
     )
-
-    result = graph.invoke(
-        {
-            "messages": graph_messages,
-            "order_number": "",
+    
+    
+    with langfuse.start_as_current_span(
+        name="relay_agent_run",
+        metadata={
+            "correlation_id": correlation_id,
+            "user_id": user_id,
+            "conversation_id": conversation_id,
         },
-        config={
-            "recursion_limit": 8,
-        },
-    )
+    ):
+    
+        result = graph.invoke(
+            {
+                "messages": graph_messages,
+                "order_number": "",
+            },
+            config={
+                "recursion_limit": 8,
+                "metadata": {
+                    "correlation_id": correlation_id,
+                    "user_id": user_id,
+                    "conversation_id": conversation_id,
+                },
+            },
+        )
+    
+    
+    langfuse.flush()
 
     logger.info(
         "agent_execution_finished",
