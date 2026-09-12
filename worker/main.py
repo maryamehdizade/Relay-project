@@ -269,6 +269,8 @@ def process_command(channel, command):
             {
                 "messages": graph_messages,
                 "order_number": "",
+                "usage": {},
+                "web_searches": 0,
             },
             config={
                 "recursion_limit": 8,
@@ -279,6 +281,7 @@ def process_command(channel, command):
                 },
             },
         )
+        print("FINAL USAGE:",result.get("usage"))
     
     
     langfuse.flush()
@@ -296,17 +299,30 @@ def process_command(channel, command):
             response_content
         )
 
+    usage = result.get(
+        "usage",
+        {},
+    )
+    web_searches = result.get(
+        "web_searches",
+        0,
+        )
+
     event = build_event(
         "chat.response.generated",
         {
             "conversation_id": conversation_id,
             "user_id": user_id,
             "content": response_content,
+            "usage": usage,
+            "web_searches": web_searches,
         },
         correlation_id=correlation_id,
     )
 
     routing_key = f"conversation.{conversation_id}"
+
+    print(json.dumps(event, indent=2))
 
     channel.basic_publish(
         exchange=EVENT_EXCHANGE,

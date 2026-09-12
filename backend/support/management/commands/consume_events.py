@@ -6,8 +6,8 @@ import pika
 from django.core.management.base import BaseCommand
 from django.db import transaction
 
-from support.models import Conversation, Message, Document
-
+from support.models import Conversation, Message, Document, ConversationCost
+from support.cost import calculate_llm_cost, calculate_web_cost
 
 EVENT_EXCHANGE = "ai.events"
 EVENT_QUEUE = "ai.events.persistence"
@@ -243,6 +243,50 @@ class Command(BaseCommand):
 
                         if created:
                             conversation.save()
+
+                        usage = payload.get(
+                            "usage",
+                            {},
+                        )
+                        web_searches = payload.get(
+                            "web_searches",
+                            0,
+                        )
+                        
+                        input_tokens = usage.get(
+                            "input_tokens",
+                            0,
+                        )
+                        
+                        output_tokens = usage.get(
+                            "output_tokens",
+                            0,
+                        )
+                        
+                        llm_cost = calculate_llm_cost(
+                            input_tokens,
+                            output_tokens,
+                        )
+                        web_cost = calculate_web_cost(
+                            web_searches,
+                        )
+                        total_cost = (
+                            llm_cost
+                            + web_cost
+                        )
+                        ConversationCost.objects.create(
+                            conversation=conversation,
+                            correlation_id=event["correlation_id"],
+                            input_tokens=input_tokens,
+                            output_tokens=output_tokens,
+                            total_tokens=usage.get(
+                                "total_tokens",
+                                0,
+                            ),
+                            llm_cost=llm_cost,
+                            web_cost=web_cost,
+                            total_cost=total_cost,
+                        )
 
                     if created:
                         self.stdout.write(

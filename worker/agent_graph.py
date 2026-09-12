@@ -6,7 +6,7 @@ from langgraph.prebuilt import tools_condition
 
 from typing import Annotated, TypedDict
 
-from langchain_core.messages import AIMessage, AnyMessage
+from langchain_core.messages import AIMessage, AnyMessage, ToolMessage
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.message import add_messages
 from langgraph.prebuilt import ToolNode
@@ -18,6 +18,8 @@ from agent_tools import (build_order_status_tool, build_internal_document_search
 class AgentState(TypedDict):
     messages: Annotated[list[AnyMessage], add_messages]
     order_number: str
+    usage: dict
+    web_searches: int
 
 
 def prepare_order_tool_call(state: AgentState):
@@ -200,13 +202,22 @@ def build_agent_graph(user_id: int, correlation_id: str,langfuse,):
             ) as generation:
             
                 response = llm_with_tools.invoke(messages)
-            
+                usage = response.usage_metadata or {}
+
+
+                
                 generation.update(
                     output=response.content,
+                    usage_details={
+                        "input": usage.get("input_tokens", 0),
+                        "output": usage.get("output_tokens", 0),
+                        "total": usage.get("total_tokens", 0),
+                    },
                 )
     
         return {
             "messages": [response],
+            "usage": usage,
         }
 
     builder = StateGraph(AgentState)
@@ -216,9 +227,38 @@ def build_agent_graph(user_id: int, correlation_id: str,langfuse,):
         call_model,
     )
 
+    tool_node = ToolNode(tools)
+
+
+    def run_tools(state: AgentState):
+    
+        result = tool_node.invoke(state)
+    
+        web_searches = state.get(
+            "web_searches",
+            0,
+        )
+    
+        for message in result["messages"]:
+    
+            if isinstance(message, ToolMessage):
+    
+                content = str(
+                    message.content
+                )
+    
+                if "web_searches" in content:
+                    web_searches += 1
+    
+        return {
+            **result,
+            "web_searches": web_searches,
+        }
+    
+    
     builder.add_node(
         "tools",
-        ToolNode(tools),
+        run_tools,
     )
 
     builder.add_edge(

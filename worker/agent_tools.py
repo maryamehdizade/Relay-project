@@ -170,6 +170,7 @@ def build_public_web_search_tool(langfuse):
 
             result = {
                 "results": results,
+                "web_searches": 1,
             }
 
             span.update(

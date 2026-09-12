@@ -116,3 +116,57 @@ class SupportTicket(models.Model):
 
     def __str__(self):
         return self.subject
+
+
+class ConversationCost(models.Model):
+
+    conversation = models.ForeignKey(
+        Conversation,
+        on_delete=models.CASCADE,
+        related_name="costs",
+    )
+
+    correlation_id = models.UUIDField(
+        null=True,
+        blank=True,
+    )
+
+    input_tokens = models.IntegerField(
+        default=0,
+    )
+
+    output_tokens = models.IntegerField(
+        default=0,
+    )
+
+    total_tokens = models.IntegerField(
+        default=0,
+    )
+
+    llm_cost = models.DecimalField(
+        max_digits=10,
+        decimal_places=6,
+        default=0,
+    )
+
+    web_cost = models.DecimalField(
+        max_digits=10,
+        decimal_places=6,
+        default=0,
+    )
+
+    total_cost = models.DecimalField(
+        max_digits=10,
+        decimal_places=6,
+        default=0,
+    )
+
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+    )
+
+    def __str__(self):
+        return f"Cost for conversation {self.conversation_id}"
+
+
+
