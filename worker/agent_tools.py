@@ -16,7 +16,7 @@ class OrderStatusInput(BaseModel):
     )
 
 
-def build_order_status_tool(user_id: int):
+def build_order_status_tool(user_id: int, langfuse,):
     @tool(
         "get_order_status",
         args_schema=OrderStatusInput,
@@ -28,10 +28,24 @@ def build_order_status_tool(user_id: int):
         Use this when the customer asks about the status,
         tracking information, or existence of one of their orders.
         """
-        return get_order_status(
-            user_id=user_id,
-            order_number=order_number,
-        )
+        with langfuse.start_as_current_span(
+            name="tool_get_order_status",
+            input={
+                "order_number": order_number,
+                "user_id": user_id,
+            },
+        ) as span:
+        
+            result = get_order_status(
+                user_id=user_id,
+                order_number=order_number,
+            )
+        
+            span.update(
+                output=result,
+            )
+        
+            return result
 
     return order_status_tool
 
