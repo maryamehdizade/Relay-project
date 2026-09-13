@@ -6,9 +6,10 @@ from rest_framework.generics import (
 )
 from rest_framework.permissions import IsAuthenticated
 
-from .models import Order, Conversation, Message, Document
+from .models import Order, Conversation, Message, Document, ConversationCost
 from .serializers import (OrderSerializer, ConversationSerializer, MessageSerializer, DocumentSerializer)
 from .messaging import build_message, publish_command
+from rest_framework.response import Response
 
 import uuid
 
@@ -110,4 +111,48 @@ class DocumentListCreateView(ListCreateAPIView):
         )
 
         publish_command(command)
+
+
+class ConversationCostView(RetrieveAPIView):
+    permission_classes = [IsAuthenticated]
+
+    def retrieve(self, request, *args, **kwargs):
+        conversation_id = kwargs["conversation_id"]
+
+        conversation = get_object_or_404(
+            Conversation,
+            id=conversation_id,
+            user=request.user,
+        )
+
+        costs = ConversationCost.objects.filter(
+            conversation=conversation
+        ).order_by("-created_at")
+
+        total = {
+            "conversation_id": conversation.id,
+            "input_tokens": sum(
+                item.input_tokens for item in costs
+            ),
+            "output_tokens": sum(
+                item.output_tokens for item in costs
+            ),
+            "total_tokens": sum(
+                item.total_tokens for item in costs
+            ),
+            "llm_cost": sum(
+                item.llm_cost for item in costs
+            ),
+            "web_cost": sum(
+                item.web_cost for item in costs
+            ),
+            "total_cost": sum(
+                item.total_cost for item in costs
+            ),
+        }
+
+        return Response(total)
+
+
+
 
