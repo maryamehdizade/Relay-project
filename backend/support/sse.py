@@ -101,6 +101,7 @@ async def event_stream(request, conversation_id):
                 async for message in queue_iterator:
                     async with message.process():
                         event = json.loads(message.body)
+                
 
                         payload = event.get("payload", {})
 

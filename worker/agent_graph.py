@@ -1,4 +1,8 @@
 import os
+import json
+import pika
+import uuid
+
 
 from langchain_core.messages import SystemMessage
 from langchain_openai import ChatOpenAI
@@ -160,8 +164,37 @@ policy, warranty, timing, or procedural claims that are not supported
 by the retrieved document content.
 """.strip()
 
+def publish_activity(
+    channel,
+    conversation_id,
+    correlation_id,
+    user_id,
+    message,
+    status="running",
+):
+    event = {
+        "version": "1.0",
+        "event_id": str(uuid.uuid4()),
+        "correlation_id": correlation_id,
+        "type": "agent.activity",
+        "payload": {
+            "conversation_id": conversation_id,
+            "user_id": user_id,
+            "message": message,
+            "status": status,
+        },
+    }
+    channel.basic_publish(
+        exchange="ai.events",
+        routing_key=f"conversation.{conversation_id}",
+        body=json.dumps(event),
+        properties=pika.BasicProperties(
+            delivery_mode=2,
+        ),
+    )
 
-def build_agent_graph(user_id: int, correlation_id: str,langfuse,):
+
+def build_agent_graph(user_id: int, correlation_id: str,langfuse, channel,conversation_id: int,):
     order_status_tool = build_order_status_tool(user_id, langfuse)
     internal_document_search_tool = (build_internal_document_search_tool(user_id, langfuse))
     create_support_ticket_tool = build_create_support_ticket_tool(user_id, correlation_id, langfuse)
@@ -231,29 +264,81 @@ def build_agent_graph(user_id: int, correlation_id: str,langfuse,):
 
 
     def run_tools(state: AgentState):
+        last_message = state["messages"][-1]
+        for tool_call in last_message.tool_calls:
+
+            tool_name = tool_call["name"]
     
-        result = tool_node.invoke(state)
+            activity_map = {
+                "get_order_status":
+                    "Searching orders...",
     
-        web_searches = state.get(
-            "web_searches",
-            0,
-        )
+                "search_internal_documents":
+                    "Reading internal documents...",
     
-        for message in result["messages"]:
+                "search_public_web":
+                    "Searching web...",
     
-            if isinstance(message, ToolMessage):
+                "create_support_ticket":
+                    "Creating support ticket...",
+            }
     
-                content = str(
-                    message.content
-                )
+            publish_activity(
+                channel,
+                conversation_id,
+                correlation_id,
+                user_id,
+                activity_map.get(
+                    tool_name,
+                    "Using tool...",
+                ),
+            )
+
+        try:
     
-                if "web_searches" in content:
-                    web_searches += 1
+            result = tool_node.invoke(state)
+        
+            web_searches = state.get(
+                "web_searches",
+                0,
+            )
+        
+            for message in result["messages"]:
+        
+                if isinstance(message, ToolMessage):
     
-        return {
-            **result,
-            "web_searches": web_searches,
-        }
+                    publish_activity(
+                        channel,
+                        conversation_id,
+                        correlation_id,
+                        user_id,
+                        "Tool execution completed",
+                    )
+    
+        
+                    content = str(
+                        message.content
+                    )
+        
+                    if "web_searches" in content:
+                        web_searches += 1
+        
+            return {
+                **result,
+                "web_searches": web_searches,
+            }
+
+        except Exception as e:
+
+            publish_activity(
+                channel,
+                conversation_id,
+                correlation_id,
+                user_id,
+                "Tool execution failed",
+            )
+        
+            raise e
     
     
     builder.add_node(

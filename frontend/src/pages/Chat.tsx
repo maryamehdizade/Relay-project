@@ -36,7 +36,12 @@ function Chat() {
 
 
   useEffect(() => {
+    
+    console.log("TOKEN:", token);
+
     if (token) {
+      console.log("CONNECTING SSE");
+
       connect(
         token,
         conversationId,

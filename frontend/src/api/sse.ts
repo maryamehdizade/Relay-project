@@ -73,6 +73,10 @@ export async function connectToEventStream({
         retryCount === 0 ? "connecting" : "reconnecting"
       );
 
+      console.log(
+        "OPENING SSE",
+        `${API_BASE_URL}/api/conversations/${conversationId}/events/stream/`
+      );
       const response = await fetch(
         `${API_BASE_URL}/api/conversations/${conversationId}/events/stream/`,
         {

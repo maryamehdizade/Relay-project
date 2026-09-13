@@ -52,6 +52,30 @@ def build_event(event_type, payload, correlation_id):
         "payload": payload,
     }
 
+def publish_activity(
+    channel,
+    conversation_id,
+    correlation_id,
+    message,
+):
+    event = build_event(
+        "agent.activity",
+        {
+            "message": message,
+        },
+        correlation_id,
+    )
+
+    channel.basic_publish(
+        exchange=EVENT_EXCHANGE,
+        routing_key=f"conversation.{conversation_id}",
+        body=json.dumps(event),
+        properties=pika.BasicProperties(
+            delivery_mode=2,
+        ),
+    )
+
+
 def process_document_index_command(
     channel,
     command,
@@ -247,7 +271,17 @@ def process_command(channel, command):
         user_id=user_id,
         correlation_id=correlation_id,
         langfuse = langfuse,
+        channel=channel,
+        conversation_id=conversation_id,
     )
+    publish_activity(
+        channel,
+        conversation_id,
+        correlation_id,
+        user_id,
+        "Generating answer...",
+    )
+
     logger.info(
         "agent_execution_started",
         extra={

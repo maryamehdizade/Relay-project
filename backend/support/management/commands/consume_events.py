@@ -340,7 +340,10 @@ class Command(BaseCommand):
                         )
                     )
 
-            
+                elif event_type == "agent.activity":
+                    pass
+
+
                 # Unknown event
                 
                 else:
