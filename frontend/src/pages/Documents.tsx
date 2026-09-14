@@ -1,5 +1,8 @@
 import { useEffect, useState } from "react";
 import Navbar from "../components/Navbar";
+import {
+  useDocumentEventStream
+} from "../hooks/useDocumentEventStream";
 
 const API_URL = "http://localhost:8000";
 
@@ -15,7 +18,11 @@ function Documents() {
 
   const token =
     localStorage.getItem("token") || "";
-
+  
+  const {
+    latestEvent,
+    connect,
+  } = useDocumentEventStream();
   
 
 
@@ -63,44 +70,58 @@ function Documents() {
     if (!response.ok) {
       return;
     }
-  
+    await loadDocuments();
   
     setFile(null);
   
   }
 
-  useEffect(() => {
+  async function loadDocuments() {
 
-    async function loadDocuments() {
-
-      const response = await fetch(
-        `${API_URL}/api/documents/`,
-        {
-          headers: {
-            Authorization:
-              `Token ${token}`,
-          },
+    const response = await fetch(
+      `${API_URL}/api/documents/`,
+      {
+        headers: {
+          Authorization:
+            `Token ${token}`,
         },
-      );
-
-
-      if (!response.ok) {
-        return;
-      }
-
-
-      const data =
-        await response.json();
-
-
-      setDocuments(data);
+      },
+    );
+  
+  
+    if (!response.ok) {
+      return;
     }
-
-
-    loadDocuments();
-
-  }, []);
-
+  
+  
+    const data =
+      await response.json();
+  
+  
+    setDocuments(data);
+  }
+  useEffect(() => {
+      loadDocuments();
+      connect()
+    }, []);
+  
+    useEffect(() => {
+  
+    if (!latestEvent) {
+      return;
+    }
+  
+  
+    if (
+      latestEvent.type ===
+      "documents.indexed"
+    ) {
+  
+      loadDocuments();
+  
+    }
+  
+  }, [latestEvent]);
 
   return (
     <main>

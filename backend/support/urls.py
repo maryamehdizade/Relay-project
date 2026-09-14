@@ -1,5 +1,5 @@
 from django.urls import path
-from .sse import event_stream
+from .sse import event_stream, document_event_stream
 
 from .views import (
     ConversationListCreateView,
@@ -27,6 +27,8 @@ urlpatterns = [
     path("conversations/<int:conversation_id>/events/stream/",event_stream,name="event-stream",),
 
     path("documents/", DocumentListCreateView.as_view(),name="document-list-create",),
+
+    path("documents/events/stream/",document_event_stream,name="document-event-stream",),
     
 
     

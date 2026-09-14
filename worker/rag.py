@@ -105,26 +105,42 @@ def search_internal_documents(
     query: str,
     user_id: int,
     n_results: int = 3,
+    source_name: str | None = None,
 ) -> list[dict]:
     collection = get_collection()
+
+    where_filter = {
+        "$or": [
+            {
+                "scope": {
+                    "$eq": "global",
+                }
+            },
+            {
+                "user_id": {
+                    "$eq": user_id,
+                }
+            },
+        ]
+    }
+    
+    
+    if source_name:
+        where_filter = {
+            "$and": [
+                where_filter,
+                {
+                    "source": {
+                        "$eq": source_name,
+                    }
+                },
+            ]
+        }
 
     results = collection.query(
         query_texts=[query],
         n_results=n_results,
-        where={
-            "$or": [
-                {
-                    "scope": {
-                        "$eq": "global",
-                    }
-                },
-                {
-                    "user_id": {
-                        "$eq": user_id,
-                    }
-                },
-            ]
-        },
+        where=where_filter,
     )
 
     documents = results["documents"][0]

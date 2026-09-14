@@ -56,10 +56,22 @@ class InternalDocumentSearchInput(BaseModel):
         min_length=3,
         max_length=500,
         description=(
-            "A question about internal company policies, "
-            "product information, warranty, refunds, or FAQs."
+            "A question about internal documents, uploaded PDFs"
+            "manuals, guides, policies, product information"
+            "warranties, refunds, or FAQs"
+            "If the user mentions a specific filename"
+            "provide it as source_name."
         ),
     )
+    source_name: str | None = Field(
+                default=None,
+                description=(
+                    "Optional filename when the user asks "
+                    "about a specific uploaded document."
+                ),
+            )   
+    
+    
 
 
 def build_internal_document_search_tool(user_id: int, langfuse,):
@@ -69,13 +81,14 @@ def build_internal_document_search_tool(user_id: int, langfuse,):
     )
     def internal_document_search_tool(
         query: str,
+        source_name: str | None = None,
     ) -> dict:
         """
-        Search company-wide and authenticated-user
-        internal documents.
-
-        Use this for policies, product FAQs,
-        refunds, warranties, and internal documents.
+        Search uploaded documents and company internal knowledge.
+        
+        Use this for questions about PDFs, manuals, guides,
+        policies, product information, refunds, warranties,
+        FAQs, and other internal documents.
         """
         with langfuse.start_as_current_span(
             name="tool_search_internal_documents",
@@ -88,9 +101,11 @@ def build_internal_document_search_tool(user_id: int, langfuse,):
             matches = search_internal_documents(
                 query=query,
                 user_id=user_id,
+                source_name=source_name,
                 n_results=3,
             )
         
+
             result = {
                 "matches": matches,
             }
