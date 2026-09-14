@@ -3,6 +3,8 @@ import { useEffect, useState } from "react";
 import { useEventStream } from "../hooks/useEventStream";
 import ActivityPanel from "../components/ActivityPanel";
 
+import Navbar from "../components/Navbar";
+
 const API_URL = "http://localhost:8000";
 
 
@@ -191,6 +193,8 @@ function Chat() {
 
   return (
     <main>
+
+      <Navbar />
 
       <h1>
         Relay Chat

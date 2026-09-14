@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-
+import Navbar from "../components/Navbar";
 
 const API_URL = "http://localhost:8000";
 
@@ -38,6 +38,10 @@ function Documents() {
     formData.append(
       "file",
       file,
+    );
+    formData.append(
+      "name",
+      file.name,
     );
   
   
@@ -100,6 +104,7 @@ function Documents() {
 
   return (
     <main>
+      <Navbar />
 
       <h1>
         Documents
