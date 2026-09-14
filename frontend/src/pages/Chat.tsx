@@ -5,6 +5,10 @@ import ActivityPanel from "../components/ActivityPanel";
 
 import Navbar from "../components/Navbar";
 import { getMessages } from "../api/client";
+import {
+  getConversations,
+  createConversation,
+} from "../api/client";
 
 const API_URL = "http://localhost:8000";
 
@@ -22,7 +26,8 @@ function Chat() {
   const token =
     localStorage.getItem("token") || "";
 
-  const conversationId = 1;
+  const [conversationId, setConversationId] =
+    useState<number | null>(null);
 
   const {
     connectionState,
@@ -44,23 +49,77 @@ function Chat() {
   const [cost, setCost] =
     useState<number | null>(null);
 
+  async function loadConversation() {
+    try {
+      const conversations =
+        await getConversations(token);
+  
+  
+      if (conversations.length > 0) {
+        console.log(
+          "LOADED CONVERSATION:",
+          conversations[0],
+        );
 
-  useEffect(() => {
-    
-    console.log("TOKEN:", token);
-
-    if (token) {
-      loadMessages();
-      
-      console.log("CONNECTING SSE");
-
-      connect(
-        token,
-        conversationId,
+        setConversationId(
+          conversations[0].id,
+        );
+  
+        return;
+      }
+  
+  
+      const conversation =
+        await createConversation(token);
+  
+  
+      setConversationId(
+        conversation.id,
+      );
+  
+    } catch (error) {
+      console.error(
+        "Failed loading conversation:",
+        error,
       );
     }
+  }
+  useEffect(() => {
+    
+      async function startChat() {
+  
+      if (!token) {
+        return;
+      }
+  
+  
+      await loadConversation();
+  
+    }
+  
+  
+    startChat();
   }, []);
+  useEffect(() => {
 
+    if (!conversationId) {
+      return;
+    }
+  
+    console.log(
+      "USING CONVERSATION:",
+      conversationId,
+    );
+    
+    loadMessages();
+  
+  
+    connect(
+      token,
+      conversationId,
+    );
+  
+  }, [conversationId]);
 
   useEffect(() => {
     if (!latestEvent) {
@@ -130,6 +189,9 @@ function Chat() {
   }, [latestEvent]);
 
   async function loadMessages() {
+    if (!conversationId) {
+      return;
+    }
     try {
       const data = await getMessages(
         conversationId,
@@ -176,6 +238,9 @@ function Chat() {
   }
 
   async function sendMessage() {
+    if (!conversationId) {
+      return;
+    }
     if (!input.trim()) {
       return;
     }

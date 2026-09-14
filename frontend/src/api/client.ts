@@ -56,3 +56,59 @@ export async function getMessages(
 
   return response.json();
 }
+
+export async function getConversations(
+  token: string,
+) {
+  const response = await fetch(
+    "http://localhost:8000/api/conversations/",
+    {
+      headers: {
+        Authorization:
+          `Token ${token}`,
+      },
+    },
+  );
+
+
+  if (!response.ok) {
+    throw new Error(
+      "Failed to load conversations",
+    );
+  }
+
+
+  return response.json();
+}
+
+
+export async function createConversation(
+  token: string,
+) {
+  const response = await fetch(
+    "http://localhost:8000/api/conversations/",
+    {
+      method: "POST",
+
+      headers: {
+        Authorization:
+          `Token ${token}`,
+
+        "Content-Type":
+          "application/json",
+      },
+
+      body: JSON.stringify({}),
+    },
+  );
+
+
+  if (!response.ok) {
+    throw new Error(
+      "Failed to create conversation",
+    );
+  }
+
+
+  return response.json();
+}
