@@ -34,3 +34,25 @@ export async function login(
 
   return data;
 }
+export async function getMessages(
+  conversationId: number,
+  token: string,
+) {
+  const response = await fetch(
+    `http://localhost:8000/api/conversations/${conversationId}/messages/`,
+    {
+      method: "GET",
+      headers: {
+        Authorization: `Token ${token}`,
+      },
+    },
+  );
+
+  if (!response.ok) {
+    throw new Error(
+      "Failed to load messages",
+    );
+  }
+
+  return response.json();
+}

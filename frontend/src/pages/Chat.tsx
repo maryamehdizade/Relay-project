@@ -4,6 +4,7 @@ import { useEventStream } from "../hooks/useEventStream";
 import ActivityPanel from "../components/ActivityPanel";
 
 import Navbar from "../components/Navbar";
+import { getMessages } from "../api/client";
 
 const API_URL = "http://localhost:8000";
 
@@ -49,6 +50,8 @@ function Chat() {
     console.log("TOKEN:", token);
 
     if (token) {
+      loadMessages();
+      
       console.log("CONNECTING SSE");
 
       connect(
@@ -126,7 +129,30 @@ function Chat() {
 
   }, [latestEvent]);
 
-
+  async function loadMessages() {
+    try {
+      const data = await getMessages(
+        conversationId,
+        token,
+      );
+  
+      setMessages(
+        data.map((message: any) => ({
+          role:
+            message.role === "assistant"
+              ? "assistant"
+              : "user",
+          content: message.content,
+        }))
+      );
+  
+    } catch (error) {
+      console.error(
+        "Failed loading messages:",
+        error,
+      );
+    }
+  }
   async function loadCost() {
     const response = await fetch(
       `${API_URL}/api/conversations/${conversationId}/cost/`,
