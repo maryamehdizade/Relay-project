@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 
 import { useEventStream } from "../hooks/useEventStream";
-
+import ActivityPanel from "../components/ActivityPanel";
 
 const API_URL = "http://localhost:8000";
 
@@ -10,7 +10,10 @@ interface Message {
   role: "user" | "assistant";
   content: string;
 }
-
+interface Activity {
+  message: string;
+  status?: string;
+}
 
 function Chat() {
   const token =
@@ -24,9 +27,13 @@ function Chat() {
     connect,
   } = useEventStream();
 
-
+  
   const [messages, setMessages] =
     useState<Message[]>([]);
+
+  
+
+  const [activities, setActivities] = useState<Activity[]>([]);
 
   const [input, setInput] =
     useState("");
@@ -54,6 +61,32 @@ function Chat() {
     if (!latestEvent) {
       return;
     }
+    if (
+      latestEvent.type ===
+      "agent.activity"
+    ) {
+
+      const message =
+        latestEvent.payload.message;
+      const status =
+        latestEvent.payload.status;
+
+  
+      if (typeof message === "string") {
+        setActivities((previous) => [
+          ...previous,
+          {
+            message,
+            status:
+              typeof status === "string"
+                ? status
+                : undefined,
+          },
+        ]);
+      }
+  
+      return;
+    }
 
 
     if (
@@ -73,7 +106,7 @@ function Chat() {
           },
         ]);
       }
-
+      loadCost();
 
       const usage =
         latestEvent.payload.usage as
@@ -92,6 +125,27 @@ function Chat() {
   }, [latestEvent]);
 
 
+  async function loadCost() {
+    const response = await fetch(
+      `${API_URL}/api/conversations/${conversationId}/cost/`,
+      {
+        headers: {
+          Authorization:
+            `Token ${token}`,
+        },
+      },
+    );
+  
+    if (!response.ok) {
+      return;
+    }
+  
+    const data = await response.json();
+  
+    setCost(
+      data.total_cost,
+    );
+  }
 
   async function sendMessage() {
     if (!input.trim()) {
@@ -102,6 +156,7 @@ function Chat() {
     const message = input;
 
     setInput("");
+    setActivities([]);
 
 
     setMessages((previous) => [
@@ -170,21 +225,15 @@ function Chat() {
       </section>
 
 
-      <section>
-        <h3>
-          AI Activity
-        </h3>
-
-        <p>
-          Generating answer...
-        </p>
-      </section>
+      <ActivityPanel
+        activities={activities}
+      />
 
 
       <section>
         Cost:
         {" "}
-        {cost
+        {cost !== null
           ? `$${cost}`
           : "waiting"}
       </section>

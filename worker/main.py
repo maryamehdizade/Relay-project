@@ -14,6 +14,7 @@ from rag import index_uploaded_document
 from logger import logger
 from langfuse import Langfuse
 
+
 RABBITMQ_HOST = os.getenv("RABBITMQ_HOST", "rabbitmq")
 RABBITMQ_PORT = int(os.getenv("RABBITMQ_PORT", "5672"))
 RABBITMQ_USER = os.getenv("RABBITMQ_DEFAULT_USER", "guest")
@@ -56,25 +57,35 @@ def publish_activity(
     channel,
     conversation_id,
     correlation_id,
+    user_id,
     message,
 ):
     event = build_event(
         "agent.activity",
         {
+            "conversation_id": conversation_id,
+            "user_id": user_id,
             "message": message,
         },
         correlation_id,
     )
+    try:
 
-    channel.basic_publish(
-        exchange=EVENT_EXCHANGE,
-        routing_key=f"conversation.{conversation_id}",
-        body=json.dumps(event),
-        properties=pika.BasicProperties(
-            delivery_mode=2,
-        ),
-    )
-
+        channel.basic_publish(
+            exchange=EVENT_EXCHANGE,
+            routing_key=f"conversation.{conversation_id}",
+            body=json.dumps(event),
+            properties=pika.BasicProperties(
+                delivery_mode=2,
+            ),
+        )
+    except Exception as exc:
+        logger.warning(
+            f"activity_publish_failed error={exc}",
+            extra={
+                "correlation_id": correlation_id,
+            },
+        )
 
 def process_document_index_command(
     channel,
@@ -494,9 +505,19 @@ def main():
 
     connection = pika.BlockingConnection(
         pika.ConnectionParameters(
-            host=RABBITMQ_HOST,
-            port=RABBITMQ_PORT,
+            host=os.getenv(
+                "RABBITMQ_HOST",
+                "rabbitmq",
+            ),
+            port=int(
+                os.getenv(
+                    "RABBITMQ_PORT",
+                    "5672",
+                )
+            ),
             credentials=credentials,
+            heartbeat=600,
+            blocked_connection_timeout=300,
         )
     )
 

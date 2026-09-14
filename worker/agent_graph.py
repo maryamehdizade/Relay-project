@@ -184,14 +184,21 @@ def publish_activity(
             "status": status,
         },
     }
-    channel.basic_publish(
-        exchange="ai.events",
-        routing_key=f"conversation.{conversation_id}",
-        body=json.dumps(event),
-        properties=pika.BasicProperties(
-            delivery_mode=2,
-        ),
-    )
+    try:
+
+       channel.basic_publish(
+           exchange="ai.events",
+           routing_key=f"conversation.{conversation_id}",
+           body=json.dumps(event),
+           properties=pika.BasicProperties(
+               delivery_mode=2,
+           ),
+       )
+    except Exception as exc:
+        print(
+            f"Activity publish failed: {exc}"
+        )
+
 
 
 def build_agent_graph(user_id: int, correlation_id: str,langfuse, channel,conversation_id: int,):
@@ -313,6 +320,7 @@ def build_agent_graph(user_id: int, correlation_id: str,langfuse, channel,conver
                         correlation_id,
                         user_id,
                         "Tool execution completed",
+                        "completed",
                     )
     
         
@@ -336,6 +344,7 @@ def build_agent_graph(user_id: int, correlation_id: str,langfuse, channel,conver
                 correlation_id,
                 user_id,
                 "Tool execution failed",
+                "failed",
             )
         
             raise e
