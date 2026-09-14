@@ -16,10 +16,54 @@ function Documents() {
   const token =
     localStorage.getItem("token") || "";
 
+  
+
 
   const [documents, setDocuments] =
     useState<Document[]>([]);
 
+  const [file, setFile] =
+    useState<File | null>(null);
+  
+  async function uploadDocument() {
+
+    if (!file) {
+      return;
+    }
+  
+  
+    const formData =
+      new FormData();
+  
+    formData.append(
+      "file",
+      file,
+    );
+  
+  
+    const response = await fetch(
+      `${API_URL}/api/documents/`,
+      {
+        method: "POST",
+  
+        headers: {
+          Authorization:
+            `Token ${token}`,
+        },
+  
+        body: formData,
+      },
+    );
+  
+  
+    if (!response.ok) {
+      return;
+    }
+  
+  
+    setFile(null);
+  
+  }
 
   useEffect(() => {
 
@@ -61,6 +105,27 @@ function Documents() {
         Documents
       </h1>
 
+      <section>
+
+        <input
+          type="file"
+          accept="application/pdf"
+          onChange={(event) =>
+            setFile(
+              event.target.files?.[0] || null
+            )
+          }
+        />
+  
+  
+        <button
+          onClick={uploadDocument}
+        >
+          Upload
+        </button>
+  
+      </section>
+  
 
       {
         documents.length === 0 ? (
